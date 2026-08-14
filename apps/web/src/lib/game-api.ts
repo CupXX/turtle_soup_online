@@ -17,6 +17,7 @@ export type AdminStatusResponse = {
   gameId: string | null;
   gameStatus: 'WAITING' | 'ACTIVE' | 'ENDED' | null;
   extractionStatus: string | null;
+  actionStatus: string | null;
   errorCode: string | null;
   workerHealthy: boolean;
 };
@@ -126,4 +127,12 @@ export function fetchAdminStatus(): Promise<AdminStatusResponse> {
 
 export function retryExtraction(): Promise<{ status: 'RETRY' }> {
   return postJson('/api/admin/games/current/retry-extraction', {});
+}
+
+export function retryBlockedAction(): Promise<{ status: 'RETRY' }> {
+  return postJson('/api/admin/games/current/retry-blocked-action', {});
+}
+
+export function forceEndGame(): Promise<{ status: 'ENDED'; endReason: 'FORCE_ENDED' }> {
+  return postJson('/api/admin/games/current/force-end', { confirmation: 'FORCE_END' });
 }

@@ -23,8 +23,14 @@ export type AdminStatus = {
   gameId: string | null;
   gameStatus: 'WAITING' | 'ACTIVE' | 'ENDED' | null;
   extractionStatus: string | null;
+  actionStatus: string | null;
   errorCode: string | null;
   workerHealthy: boolean;
+};
+
+export type ForceEndResult = {
+  status: 'ENDED';
+  endReason: 'FORCE_ENDED';
 };
 
 export class GameAlreadyOpenError extends Error {
@@ -52,6 +58,13 @@ export class ExtractionRetryError extends Error {
   constructor() {
     super('JUDGE_UNAVAILABLE');
     this.name = 'ExtractionRetryError';
+  }
+}
+
+export class BlockedActionRetryError extends Error {
+  constructor() {
+    super('QUEUE_BLOCKED');
+    this.name = 'BlockedActionRetryError';
   }
 }
 
@@ -105,10 +118,10 @@ export async function getAdminStatus(sql: Sql): Promise<AdminStatus> {
   `;
   const game = games[0];
   if (!game) {
-    return { gameId: null, gameStatus: null, extractionStatus: null, errorCode: null, workerHealthy: false };
+    return { gameId: null, gameStatus: null, extractionStatus: null, actionStatus: null, errorCode: null, workerHealthy: false };
   }
 
-  const [jobs, heartbeats] = await Promise.all([
+  const [jobs, actions, heartbeats] = await Promise.all([
     sql<Array<{ status: string; errorCode: string | null }>>`
       select jobs.status, jobs.error_code as "errorCode"
       from private.key_point_extraction_jobs jobs
@@ -116,6 +129,14 @@ export async function getAdminStatus(sql: Sql): Promise<AdminStatus> {
         on secrets.game_id = jobs.game_id and secrets.input_version = jobs.input_version
       where jobs.game_id = ${game.id}
       order by jobs.input_version desc
+      limit 1
+    `,
+    sql<Array<{ status: string }>>`
+      select status
+      from private.game_actions
+      where game_id = ${game.id}
+        and status not in ('COMPLETED', 'CANCELLED')
+      order by sequence_no asc
       limit 1
     `,
     sql<Array<{ lastSeenAt: string }>>`
@@ -130,6 +151,7 @@ export async function getAdminStatus(sql: Sql): Promise<AdminStatus> {
     gameId: game.id,
     gameStatus: game.gameStatus,
     extractionStatus: jobs[0]?.status ?? null,
+    actionStatus: actions[0]?.status ?? null,
     errorCode: jobs[0]?.errorCode ?? null,
     workerHealthy,
   };
@@ -346,5 +368,174 @@ export async function activateGame(
       set status = 'COMPLETED', updated_at = now()
       where game_id = ${gameId} and input_version = ${input.inputVersion}
     `;
+  });
+}
+
+export async function retryBlockedAction(
+  gameId: string,
+  dependencies: LifecycleDependencies = {},
+): Promise<void> {
+  const validGameId = requireUuid(gameId, 'gameId');
+
+  await runner(dependencies)(async (sql) => {
+    await requireFreshWorker(sql);
+    const games = await sql<Array<{ id: string; status: string }>>`
+      select id, status
+      from api.games
+      where id = ${validGameId}
+      for update
+    `;
+    const game = games[0];
+    if (!game) throw new GameLifecycleStateError('NO_CURRENT_GAME');
+    if (game.status !== 'ACTIVE') throw new GameLifecycleStateError('GAME_NOT_ACTIVE');
+
+    const actions = await sql<Array<{ id: string; status: string }>>`
+      select id, status
+      from private.game_actions
+      where game_id = ${validGameId}
+        and status = 'BLOCKED'
+        and not exists (
+          select 1
+          from private.game_actions earlier
+          where earlier.game_id = private.game_actions.game_id
+            and earlier.sequence_no < private.game_actions.sequence_no
+            and earlier.status not in ('COMPLETED', 'CANCELLED')
+        )
+      order by sequence_no asc
+      limit 1
+      for update
+    `;
+    const action = actions[0];
+    if (!action) throw new BlockedActionRetryError();
+
+    await sql`
+      update private.game_actions
+      set status = 'RETRY',
+          next_attempt_at = now(),
+          lease_owner = null,
+          lease_expires_at = null,
+          error_code = null,
+          updated_at = now()
+      where id = ${action.id}
+        and status = 'BLOCKED'
+    `;
+  });
+}
+
+export async function forceEndGame(
+  gameId: string,
+  dependencies: LifecycleDependencies = {},
+): Promise<ForceEndResult> {
+  const validGameId = requireUuid(gameId, 'gameId');
+  const makeId = idFactory(dependencies);
+
+  return runner(dependencies)(async (sql) => {
+    // Lock incomplete actions before the game row. Worker completion locks the
+    // action first and then the game, so this ordering makes the race wait
+    // instead of deadlocking.
+    await sql`
+      select id
+      from private.game_actions
+      where game_id = ${validGameId}
+        and status not in ('COMPLETED', 'CANCELLED')
+      order by sequence_no asc
+      for update
+    `;
+    const games = await sql<Array<{ id: string; status: string }>>`
+      select id, status
+      from api.games
+      where id = ${validGameId}
+      for update
+    `;
+    const game = games[0];
+    if (!game) throw new GameLifecycleStateError('NO_CURRENT_GAME');
+    if (game.status !== 'ACTIVE') throw new GameLifecycleStateError('GAME_NOT_ACTIVE');
+
+    const [secrets, keyPoints, sequences] = await Promise.all([
+      sql<Array<{ fullSolution: string }>>`
+        select full_solution as "fullSolution"
+        from private.game_secrets
+        where game_id = ${validGameId}
+        order by input_version desc
+        limit 1
+      `,
+      sql<Array<{ ordinal: number; content: string }>>`
+        select ordinal, content
+        from private.key_points
+        where game_id = ${validGameId}
+        order by ordinal asc
+      `,
+      sql<Array<{ sequenceNo: number | string }>>`
+        select coalesce(max(sequence_no), 0) as "sequenceNo"
+        from private.game_actions
+        where game_id = ${validGameId}
+      `,
+    ]);
+    const secret = secrets[0];
+    if (!secret || keyPoints.length < 3) throw new GameLifecycleStateError('NO_CURRENT_GAME');
+    const sequenceNo = Number(sequences[0]?.sequenceNo ?? 0) + 1;
+    const eventId = makeId();
+
+    await sql`
+      insert into api.game_events
+        (id, game_id, sequence_no, event_type, player_id, awarded_points, created_at)
+      values
+        (${eventId}, ${validGameId}, ${sequenceNo}, 'FORCE_ENDED', null, 0, now())
+      on conflict (game_id, sequence_no) do nothing
+    `;
+    await sql`
+      insert into api.game_reveals (game_id, full_solution, revealed_at)
+      values (${validGameId}, ${secret.fullSolution}, now())
+      on conflict (game_id) do nothing
+    `;
+    for (const point of keyPoints) {
+      await sql`
+        insert into api.revealed_key_points (game_id, ordinal, content)
+        values (${validGameId}, ${point.ordinal}, ${point.content})
+        on conflict (game_id, ordinal) do nothing
+      `;
+    }
+    await sql`
+      update api.games
+      set status = 'ENDED',
+          end_reason = 'FORCE_ENDED',
+          winner_player_id = null,
+          ended_at = now(),
+          updated_at = now()
+      where id = ${validGameId}
+        and status = 'ACTIVE'
+    `;
+    await sql`
+      update api.messages
+      set status = 'CANCELLED',
+          updated_at = now()
+      where id in (
+        select result_resource_id
+        from private.game_actions
+        where game_id = ${validGameId}
+          and action_type = 'NORMAL_MESSAGE'
+          and status not in ('COMPLETED', 'CANCELLED')
+      )
+        and status = 'PENDING'
+    `;
+    await sql`
+      update private.final_answer_submissions
+      set status = 'CANCELLED',
+          judged_at = now()
+      where game_id = ${validGameId}
+        and status not in ('COMPLETED', 'CANCELLED')
+    `;
+    await sql`
+      update private.game_actions
+      set status = 'CANCELLED',
+          lease_owner = null,
+          lease_expires_at = null,
+          error_code = null,
+          updated_at = now()
+      where game_id = ${validGameId}
+        and status not in ('COMPLETED', 'CANCELLED')
+    `;
+
+    return { status: 'ENDED', endReason: 'FORCE_ENDED' };
   });
 }

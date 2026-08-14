@@ -7,7 +7,9 @@ import {
   WorkerUnavailableError,
   activateGame,
   createPreparation,
+  forceEndGame,
   replacePreparation,
+  retryBlockedAction,
   retryExtraction,
 } from './admin-lifecycle.js';
 
@@ -121,5 +123,63 @@ describe('admin lifecycle', () => {
 
     expect(result).toBeUndefined();
     expect(fake.calls.join('\n').toLowerCase()).toContain("status = 'retry'");
+  });
+
+  it('returns a blocked action head to RETRY without exposing its private payload', async () => {
+    const fake = fakeRunner((query) => {
+      const normalized = query.toLowerCase();
+      if (normalized.includes('from api.games')) return [{ id: '00000000-0000-4000-8000-000000000001', status: 'ACTIVE' }];
+      if (normalized.includes('private.game_actions')) return [{ id: '00000000-0000-4000-8000-000000000002', status: 'BLOCKED' }];
+      return [];
+    });
+
+    await retryBlockedAction('00000000-0000-4000-8000-000000000001', { transaction: fake.transaction });
+
+    const query = fake.calls.join('\n').toLowerCase();
+    expect(query).toContain("status = 'retry'");
+    expect(query).not.toContain('final_answer_submissions');
+    expect(query).not.toContain('answer');
+  });
+
+  it('force ends an active game atomically with reveal, event, and cancellation but no score update', async () => {
+    const fake = fakeRunner((query) => {
+      const normalized = query.toLowerCase();
+      if (normalized.includes('from api.games')) return [{ id: '00000000-0000-4000-8000-000000000001', status: 'ACTIVE' }];
+      if (normalized.includes('private.game_secrets')) return [{ fullSolution: 'private solution' }];
+      if (normalized.includes('private.key_points')) return [
+        { id: '00000000-0000-4000-8000-000000000011', ordinal: 1, content: 'point one' },
+        { id: '00000000-0000-4000-8000-000000000012', ordinal: 2, content: 'point two' },
+        { id: '00000000-0000-4000-8000-000000000013', ordinal: 3, content: 'point three' },
+      ];
+      if (normalized.includes('max(sequence_no)')) return [{ sequenceNo: 4 }];
+      return [];
+    });
+
+    const result = await forceEndGame('00000000-0000-4000-8000-000000000001', {
+      transaction: fake.transaction,
+      idFactory: () => '00000000-0000-4000-8000-000000000099',
+    });
+
+    expect(result).toEqual({ status: 'ENDED', endReason: 'FORCE_ENDED' });
+    const query = fake.calls.join('\n').toLowerCase();
+    expect(query).toContain("status = 'ended'");
+    expect(query).toContain("end_reason = 'force_ended'");
+    expect(query).toContain('event_type, player_id');
+    expect(query).toContain("'force_ended'");
+    expect(query).toContain('api.game_reveals');
+    expect(query).toContain('api.revealed_key_points');
+    expect(query).toContain("status = 'cancelled'");
+    expect(query).not.toContain('lifetime_score = lifetime_score +');
+  });
+
+  it('does not force end a WAITING or already ended game', async () => {
+    for (const status of ['WAITING', 'ENDED']) {
+      const fake = fakeRunner((query) => query.toLowerCase().includes('from api.games')
+        ? [{ id: '00000000-0000-4000-8000-000000000001', status }]
+        : []);
+      await expect(forceEndGame('00000000-0000-4000-8000-000000000001', { transaction: fake.transaction }))
+        .rejects.toBeInstanceOf(GameLifecycleStateError);
+      expect(fake.calls.join('\n').toLowerCase()).not.toContain('insert into api.game_reveals');
+    }
   });
 });
