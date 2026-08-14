@@ -2,13 +2,9 @@
 
 ## Decision
 
-**NO-GO — environmental verification blocker.** The candidate Harness runtime
-works in the local Node probe, but the required Docker build/run evidence cannot
-be collected on this machine because the `docker` executable is unavailable.
-
-This is not evidence that `@deepseek-ai/dsh@0.1.0-rc.6` is incompatible. The
-implementation must remain stopped at Task 1 until the same image is built and
-run by Docker (or the user explicitly changes the container requirement).
+**GO.** The candidate Harness runtime passes the local probe and the required
+Node.js 22 Docker build/run gate. The production Worker integration can proceed;
+its actual invoker still needs a separate container verification in Task 5.
 
 ## Candidate
 
@@ -28,17 +24,11 @@ run by Docker (or the user explicitly changes the container requirement).
 | Exactly one provider request per fixture | PASS | loopback SSE provider observed one request per run |
 | Sensitive session/prompt persistence scan | PASS | `toolsExposed: []`, `persistenceFiles: []` for all fixtures |
 | TypeScript strict check | PASS | `tsc --noEmit` with NodeNext/strict settings exited 0 |
-| Docker image build | BLOCKED | `docker` command not found on the current machine |
-| Docker image run | BLOCKED | cannot run without the image/runtime |
+| Docker image build | PASS | `docker build --no-cache ...` completed; Node.js `v22.23.2` image |
+| Docker image run | PASS | `docker run --rm turtle-soup-harness-spike` exited 0; all three fixtures passed |
 
 ## Required follow-up
 
-After Docker is installed and available on `PATH`, run:
-
-```powershell
-docker build -f spikes/deepseek-harness/Dockerfile -t turtle-soup-harness-spike .
-docker run --rm turtle-soup-harness-spike
-```
-
-If both commands pass and reproduce the probe evidence, replace this decision
-with **GO**, record the exact image/runtime output, and continue with Task 2.
+Task 5 must invoke the same Harness package through the production Worker
+adapter in a Docker image and confirm its dependency build allowlist. The spike
+itself is no longer an environmental blocker.

@@ -42,14 +42,28 @@ not print the runtime-home path.
 
 ## Docker verification
 
-The intended command is:
+The verified command is:
 
 ```powershell
-docker build -f spikes/deepseek-harness/Dockerfile -t turtle-soup-harness-spike .
+docker build --no-cache -f spikes/deepseek-harness/Dockerfile -t turtle-soup-harness-spike .
 docker run --rm turtle-soup-harness-spike
 ```
 
-On the current machine the `docker` executable is not installed, so these two
-commands are pending external environment setup. This is recorded as an
-environmental blocker in the runtime decision; it is not treated as proof that
-the Harness package itself is incompatible.
+Both commands passed on 2026-08-15. The image uses Node.js `v22.23.2` from
+`node:22-bookworm-slim`. The image installs `python3`, `make`, and `g++` only
+to compile the allowlisted `node-pty` native dependency during `pnpm install`.
+The container probe produced three structured outputs (extraction, question,
+and final answer), one loopback provider request per fixture, and reported:
+
+```json
+{
+  "runtime": "v22.23.2",
+  "harnessVersion": "0.1.0-rc.6",
+  "toolsExposed": [],
+  "persistenceFiles": []
+}
+```
+
+The loopback provider means this verification does not require a real API key.
+The production Worker image still needs to verify its actual Harness invoker;
+that is covered by Task 5 of the first-playable-loop plan.
