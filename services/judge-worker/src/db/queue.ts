@@ -71,7 +71,7 @@ export async function claimNextExtraction(
         )
       order by jobs.next_attempt_at asc, jobs.created_at asc
       limit 1
-      for update
+      for update of jobs
     `;
     const candidate = candidates[0];
     if (!candidate) return null;
@@ -130,7 +130,7 @@ export async function claimNextAction(
         )
       order by actions.game_id asc, actions.sequence_no asc
       limit 1
-      for update
+      for update of actions
     `;
     const candidate = candidates[0];
     if (!candidate) return null;

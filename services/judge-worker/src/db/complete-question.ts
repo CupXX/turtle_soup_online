@@ -97,13 +97,14 @@ export async function completeQuestion(
     if (!message || message.status !== 'PENDING') return;
 
     for (const keyPointId of ids) {
+      // Key points are immutable after activation; a read is enough to
+      // validate the model's claim without granting the worker UPDATE.
       const keyPoints = await sql<Array<{ id: string }>>`
         select id
         from private.key_points
         where id = ${keyPointId}
           and game_id = ${action.gameId}
         order by id
-        for update
       `;
       if (!keyPoints[0]) throw new Error('UNKNOWN_KEY_POINT_ID');
     }

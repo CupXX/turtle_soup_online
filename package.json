@@ -9,7 +9,8 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "verify:first-playable-loop": "node scripts/verify-first-playable-loop.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

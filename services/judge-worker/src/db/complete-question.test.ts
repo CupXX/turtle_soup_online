@@ -71,6 +71,8 @@ describe('completeQuestion', () => {
 
     const query = fake.calls.join('\n').toLowerCase();
     expect(query).toContain('for update');
+    const keyPointQuery = fake.calls.find((call) => call.toLowerCase().includes('from private.key_points')) ?? '';
+    expect(keyPointQuery.toLowerCase()).not.toContain('for update');
     expect(query).toContain('on conflict (key_point_id) do nothing');
     expect(query).toContain('returning key_point_id');
     expect(query).toContain('awarded_points = 2');

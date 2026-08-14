@@ -56,7 +56,7 @@ describe('durable queue', () => {
 
     const query = fake.calls.join('\n').toLowerCase();
     expect(query).toContain('private.game_secrets');
-    expect(query).toContain('for update');
+    expect(query).toContain('for update of jobs');
     expect(query).toContain("status = 'processing'");
     expect(query).not.toContain('skip locked');
   });
@@ -86,6 +86,7 @@ describe('durable queue', () => {
     const query = fake.calls[0].toLowerCase();
     expect(query).toContain('not exists');
     expect(query).toContain("status not in ('completed', 'cancelled')");
+    expect(query).toContain('for update of actions');
     expect(query).not.toContain('skip locked');
   });
 

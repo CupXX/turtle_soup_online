@@ -61,6 +61,8 @@ describe('submitMessage', () => {
     expect(query).toContain("'normal_message'");
     expect(query).toContain('total_question_count');
     expect(query).toContain('api.game_player_stats');
+    const actionLookup = fake.calls.find((call) => call.toLowerCase().includes('from private.game_actions')) ?? '';
+    expect(actionLookup.toLowerCase()).not.toContain('for update');
   });
 
   it('returns the same public message for a same-key same-payload replay without incrementing counters', async () => {

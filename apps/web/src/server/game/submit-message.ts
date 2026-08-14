@@ -151,6 +151,8 @@ export async function submitMessage(
     const game = games[0];
     if (!game || game.status !== 'ACTIVE') throw new GameNotActiveError();
 
+    // The game row lock above serializes receipt allocation; keep this lookup
+    // read-only because the web role must not lease or complete worker actions.
     const existing = await sql<ActionRow[]>`
       select
         payload_digest as "payloadDigest",
@@ -160,7 +162,6 @@ export async function submitMessage(
         and player_id = ${playerId}
         and action_type = 'NORMAL_MESSAGE'
         and idempotency_key = ${idempotencyKey}::uuid
-      for update
     `;
     if (existing[0]) {
       if (existing[0].payloadDigest !== input.payloadDigest) {

@@ -55,6 +55,7 @@ describe('completeExtraction', () => {
     expect(fake.started).toBe(1);
     const query = fake.calls.join('\n').toLowerCase();
     expect(query).toContain('for update');
+    expect(fake.calls[2].toLowerCase()).not.toContain('for update');
     expect(query).toContain('insert into private.key_points');
     expect(query).toContain("status = 'active'");
     expect(query).toContain('puzzle_surface');

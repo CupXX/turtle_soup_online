@@ -104,11 +104,12 @@ export async function completeExtraction(
     const game = games[0];
     if (!game || game.status !== 'WAITING') return;
 
+    // The game row lock above serializes preparation replacement. The worker
+    // only reads the secret and therefore must not need UPDATE on this table.
     const secrets = await sql<SecretRow[]>`
       select game_id as "gameId", input_version as "inputVersion", puzzle_surface as "puzzleSurface"
       from private.game_secrets
       where game_id = ${input.gameId}
-      for update
     `;
     const secret = secrets[0];
     if (!secret || secret.inputVersion !== input.inputVersion) return;
