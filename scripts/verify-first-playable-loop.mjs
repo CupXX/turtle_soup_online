@@ -122,14 +122,35 @@ async function apiRequest(path, options = {}) {
   return body.data;
 }
 
+async function apiErrorStatus(path, options = {}) {
+  const jar = options.jar;
+  const headers = new Headers(options.headers);
+  headers.set('origin', siteOrigin);
+  if (jar?.value) headers.set('cookie', jar.value);
+  if (options.body !== undefined) {
+    headers.set('content-type', 'application/json');
+    if (!headers.has('idempotency-key')) headers.set('idempotency-key', randomUUID());
+  }
+  const response = await fetch(`${siteOrigin}${path}`, {
+    method: options.method ?? 'GET',
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+  if (jar) updateCookie(jar, response);
+  return { status: response.status, body: await response.json() };
+}
+
 async function loadWorkerModules() {
-  const [queue, extraction, question, heartbeat] = await Promise.all([
+  const [queue, extraction, question, finalAnswer, actionProcessor, completeFinalAnswer, heartbeat] = await Promise.all([
     import('../services/judge-worker/dist/db/queue.js'),
     import('../services/judge-worker/dist/processors/extraction-processor.js'),
     import('../services/judge-worker/dist/processors/question-processor.js'),
+    import('../services/judge-worker/dist/processors/final-answer-processor.js'),
+    import('../services/judge-worker/dist/processors/action-processor.js'),
+    import('../services/judge-worker/dist/db/complete-final-answer.js'),
     import('../services/judge-worker/dist/db/heartbeat.js'),
   ]);
-  return { ...queue, ...extraction, ...question, ...heartbeat };
+  return { ...queue, ...extraction, ...question, ...finalAnswer, ...actionProcessor, ...completeFinalAnswer, ...heartbeat };
 }
 
 async function main() {
@@ -215,6 +236,13 @@ async function main() {
           fully_covered_key_point_ids: hit ? [input.key_points[0].id] : [],
         };
       },
+      async judgeFinalAnswer(input) {
+        return {
+          covered_key_point_ids: input.final_answer.includes('complete')
+            ? input.key_points.map((point) => point.id)
+            : input.key_points.slice(0, Math.max(0, input.key_points.length - 1)).map((point) => point.id),
+        };
+      },
     };
     const extractionJob = await worker.claimNextExtraction('acceptance-worker', new Date(), { transaction });
     assert(extractionJob, 'worker did not claim the extraction job');
@@ -231,6 +259,15 @@ async function main() {
     const second = await apiRequest('/api/player-session', { method: 'POST', jar: playerTwo, body: { nickname: '玩家乙' } });
     await apiRequest('/api/game/current/join', { method: 'POST', jar: playerOne, body: {} });
     await apiRequest('/api/game/current/join', { method: 'POST', jar: playerTwo, body: {} });
+    const extraPlayers = [];
+    for (let index = 3; index <= 10; index += 1) {
+      const jar = cookieJar();
+      await apiRequest('/api/player-session', { method: 'POST', jar, body: { nickname: `player-${index}` } });
+      await apiRequest('/api/game/current/join', { method: 'POST', jar, body: {} });
+      extraPlayers.push(jar);
+    }
+    const tenPlayerSnapshot = await apiRequest('/api/game/current');
+    assert(tenPlayerSnapshot.players.length === 10, 'ten-player join smoke test did not reach ten active players');
 
     const firstMessage = await apiRequest('/api/game/current/messages', {
       method: 'POST',
@@ -263,10 +300,91 @@ async function main() {
     assert(firstStats?.yesCount === 1 && firstStats.questionCount === 1, 'first player stats mismatch');
     assert(secondStats?.yesCount === 0 && secondStats.questionCount === 1, 'second player stats mismatch');
 
+    const failedReceipt = await apiRequest('/api/game/current/final-answers', {
+      method: 'POST',
+      jar: playerTwo,
+      body: { answer: 'partial answer' },
+    });
+    assert(failedReceipt.status === 'PENDING' && failedReceipt.sequenceNo === 3, 'partial final-answer receipt mismatch');
+    const failedAction = await worker.claimNextAction('acceptance-worker', new Date(), { transaction });
+    assert(Number(failedAction?.sequenceNo) === 3 && failedAction.actionType === 'FINAL_ANSWER', 'worker did not claim partial final answer');
+    await worker.processFinalAnswer(failedAction, {
+      judge,
+      workerId: 'acceptance-worker',
+      sql,
+      completeFinalAnswer: (input) => worker.completeFinalAnswer(input, { transaction }),
+    });
+    const failedSnapshot = await apiRequest('/api/game/current');
+    assert(failedSnapshot.game.status === 'ACTIVE' && failedSnapshot.events.some((event) => event.eventType === 'FINAL_ANSWER_FAILED'), 'partial final answer did not fail publicly');
+    assert(!JSON.stringify(failedSnapshot).includes('partial answer'), 'partial final answer leaked through public snapshot');
+
+    const successReceipt = await apiRequest('/api/game/current/final-answers', {
+      method: 'POST',
+      jar: playerOne,
+      body: { answer: 'complete answer' },
+    });
+    assert(successReceipt.status === 'PENDING' && successReceipt.sequenceNo === 4, 'successful final-answer receipt mismatch');
+    const laterMessage = await apiRequest('/api/game/current/messages', {
+      method: 'POST',
+      jar: playerTwo,
+      body: { content: 'this arrives after the final answer' },
+    });
+    assert(laterMessage.sequenceNo === 5, 'later action did not receive sequence five');
+    const successAction = await worker.claimNextAction('acceptance-worker', new Date(), { transaction });
+    assert(Number(successAction?.sequenceNo) === 4 && successAction.actionType === 'FINAL_ANSWER', 'worker did not claim successful final answer');
+    await worker.processFinalAnswer(successAction, {
+      judge,
+      workerId: 'acceptance-worker',
+      sql,
+      completeFinalAnswer: (input) => worker.completeFinalAnswer(input, { transaction }),
+    });
+
+    const endedSnapshot = await apiRequest('/api/game/current');
+    assert(endedSnapshot.game.status === 'ENDED' && endedSnapshot.game.endReason === 'FINAL_ANSWER_SUCCESS', 'full final answer did not end the game');
+    assert(endedSnapshot.game.winnerPlayerId === first.playerId, 'winner was not recorded');
+    assert(endedSnapshot.events.some((event) => event.eventType === 'FINAL_ANSWER_SUCCEEDED' && event.awardedPoints === 2), 'success event or +2 reward missing');
+    assert(endedSnapshot.reveal?.fullSolution === 'acceptance-private-solution-9f0e', 'success reveal missing');
+    assert(endedSnapshot.messages.find((message) => message.id === laterMessage.id)?.status === 'CANCELLED', 'later action was not cancelled');
+    assert(!JSON.stringify(endedSnapshot).includes('complete answer'), 'successful final answer leaked through public snapshot');
+    const endedSubmission = await apiErrorStatus('/api/game/current/final-answers', {
+      method: 'POST',
+      jar: playerTwo,
+      body: { answer: 'after end' },
+    });
+    assert(endedSubmission.status === 409 && endedSubmission.body.error?.code === 'GAME_NOT_ACTIVE', 'ended game accepted a final answer');
+
+    const scoreBeforeForceEnd = endedSnapshot.players.find((player) => player.id === first.playerId)?.lifetimeScore ?? 0;
+    await apiRequest('/api/admin/games', {
+      method: 'POST',
+      jar: admin,
+      body: { puzzleSurface: 'second game surface', fullSolution: 'second game private solution' },
+    });
+    const secondExtraction = await worker.claimNextExtraction('acceptance-worker', new Date(), { transaction });
+    assert(secondExtraction, 'worker did not claim second extraction job');
+    await worker.processExtraction(secondExtraction, { judge, workerId: 'acceptance-worker', sql, transaction });
+    await apiRequest('/api/game/current/join', { method: 'POST', jar: playerOne, body: {} });
+    const pendingBeforeForceEnd = await apiRequest('/api/game/current/messages', {
+      method: 'POST',
+      jar: playerOne,
+      body: { content: 'pending before force end' },
+    });
+    const forceResult = await apiRequest('/api/admin/games/current/force-end', {
+      method: 'POST',
+      jar: admin,
+      body: { confirmation: 'FORCE_END' },
+    });
+    assert(forceResult.status === 'ENDED' && forceResult.endReason === 'FORCE_ENDED', 'force end response mismatch');
+    const forceSnapshot = await apiRequest('/api/game/current');
+    assert(forceSnapshot.game.endReason === 'FORCE_ENDED', 'force-end reason missing');
+    assert(forceSnapshot.events.some((event) => event.eventType === 'FORCE_ENDED' && event.awardedPoints === 0), 'force-end event mismatch');
+    assert(forceSnapshot.reveal?.fullSolution === 'second game private solution', 'force-end reveal missing');
+    assert(forceSnapshot.messages.find((message) => message.id === pendingBeforeForceEnd.id)?.status === 'CANCELLED', 'force end did not cancel pending message');
+    assert((forceSnapshot.players.find((player) => player.id === first.playerId)?.lifetimeScore ?? 0) === scoreBeforeForceEnd, 'force end changed lifetime score');
+
     const publicPayload = JSON.stringify(finalSnapshot);
     assert(!publicPayload.includes('acceptance-private-solution-9f0e'), 'private solution leaked through public snapshot');
     assert(!publicPayload.includes('伞柄藏着门票'), 'private key point leaked through public snapshot');
-    console.log('first playable loop: PASS (activation, two ordered questions, verdicts, first-hit score, privacy)');
+    console.log('first playable loop: PASS (questions, private final answers, atomic success/failure, reveal, cancellation, force-end, privacy)');
   } finally {
     log('stopping web server');
     await stopProcess(child);
