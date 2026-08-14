@@ -34,7 +34,10 @@ describe('admin lifecycle', () => {
     const fake = fakeRunner();
     const result = await createPreparation({ puzzleSurface: '公开题面', fullSolution: '完整答案' }, {
       transaction: fake.transaction,
-      idFactory: () => '00000000-0000-4000-8000-000000000001',
+      idFactory: (() => {
+        let next = 1;
+        return () => `00000000-0000-4000-8000-00000000000${next++}`;
+      })(),
     });
 
     expect(result).toEqual({ gameId: '00000000-0000-4000-8000-000000000001', status: 'WAITING' });
@@ -42,6 +45,7 @@ describe('admin lifecycle', () => {
     const query = fake.calls.join('\n').toLowerCase();
     expect(query).toContain('private.game_secrets');
     expect(query).toContain('private.key_point_extraction_jobs');
+    expect(fake.calls.find((call) => call.toLowerCase().includes('private.key_point_extraction_jobs'))).toContain('00000000-0000-4000-8000-000000000002');
     expect(query).toContain("'waiting'");
   });
 

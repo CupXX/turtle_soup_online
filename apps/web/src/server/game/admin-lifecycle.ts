@@ -200,8 +200,8 @@ export async function createPreparation(
     `;
     await sql`
       insert into private.key_point_extraction_jobs
-        (game_id, input_version, status, attempt_count, next_attempt_at, created_at, updated_at)
-      values (${gameId}, 1, 'PENDING', 0, now(), now(), now())
+        (id, game_id, input_version, status, attempt_count, next_attempt_at, created_at, updated_at)
+      values (${makeId()}, ${gameId}, 1, 'PENDING', 0, now(), now(), now())
     `;
 
     return { gameId, status: 'WAITING' };
@@ -215,6 +215,7 @@ export async function replacePreparation(
 ): Promise<void> {
   const validGameId = requireUuid(gameId, 'gameId');
   const input = normalizePuzzleInput(rawInput);
+  const makeId = idFactory(dependencies);
 
   await runner(dependencies)(async (sql) => {
     await requireFreshWorker(sql);
@@ -248,8 +249,8 @@ export async function replacePreparation(
     `;
     await sql`
       insert into private.key_point_extraction_jobs
-        (game_id, input_version, status, attempt_count, next_attempt_at, created_at, updated_at)
-      values (${validGameId}, ${nextVersion}, 'PENDING', 0, now(), now(), now())
+        (id, game_id, input_version, status, attempt_count, next_attempt_at, created_at, updated_at)
+      values (${makeId()}, ${validGameId}, ${nextVersion}, 'PENDING', 0, now(), now(), now())
       on conflict (game_id, input_version) do nothing
     `;
   });
