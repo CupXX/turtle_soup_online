@@ -1,0 +1,22 @@
+{
+  "surface": "雨夜里，旅馆老板听见三声敲门。第二天，他在没有窗户的房间里发现一把湿伞。",
+  "solution": "客人用伞柄敲门求救，随后从暗门离开；老板误以为房间一直没有人。",
+  "expected_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["key_points"],
+    "properties": {
+      "key_points": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 5,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text"],
+          "properties": {"text": {"type": "string", "minLength": 1}}
+        }
+      }
+    }
+  }
+}
