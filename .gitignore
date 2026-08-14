@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+.next/
+dist/
+coverage/
+out/
+.env
+.env.*
+!.env.example
+supabase/.temp/
+*.log
