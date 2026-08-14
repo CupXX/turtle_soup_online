@@ -1,5 +1,5 @@
 import postgres, { type Sql, type TransactionSql } from 'postgres';
-import { getServerEnv } from '../env.js';
+import { getServerEnv } from '@/server/env';
 
 let client: Sql | undefined;
 
