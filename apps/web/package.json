@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "2.112.3",
     "@turtle-soup/contracts": "workspace:*",
+    "@turtle-soup/game-core": "workspace:*",
     "next": "16.3.1",
     "postgres": "3.4.9",
     "react": "19.2.8",

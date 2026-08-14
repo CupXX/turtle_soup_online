@@ -35,6 +35,9 @@ importers:
       '@turtle-soup/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@turtle-soup/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       next:
         specifier: 16.3.1
         version: 16.3.1(@babel/core@7.29.7)(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
