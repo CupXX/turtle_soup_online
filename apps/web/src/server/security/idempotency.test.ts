@@ -1,5 +1,6 @@
+import type { Sql } from 'postgres';
 import { describe, expect, it } from 'vitest';
-import { claimIdempotency, computePayloadDigest, type IdempotencyStore } from './idempotency.js';
+import { bindIdempotencyResult, claimIdempotency, computePayloadDigest, type IdempotencyStore } from './idempotency.js';
 
 const key = '00000000-0000-4000-8000-000000000001';
 
@@ -56,5 +57,25 @@ describe('idempotency', () => {
         store: memoryStore(),
       }),
     ).rejects.toThrow();
+  });
+
+  it('binds the public result to a previously claimed request', async () => {
+    const calls: string[] = [];
+    const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
+      calls.push(strings.reduce((text, chunk, index) => `${text}${chunk}${index < values.length ? String(values[index]) : ''}`, ''));
+      return Promise.resolve([]);
+    }) as unknown as Sql;
+
+    await bindIdempotencyResult({
+      actorScope: 'player-1',
+      operation: 'MESSAGE',
+      key,
+      resultResourceId: '00000000-0000-4000-8000-000000000002',
+      responseStatus: 200,
+    }, { sql });
+
+    expect(calls[0].toLowerCase()).toContain('update private.request_idempotency');
+    expect(calls[0].toLowerCase()).toContain('result_resource_id');
+    expect(calls[0].toLowerCase()).toContain('response_status');
   });
 });

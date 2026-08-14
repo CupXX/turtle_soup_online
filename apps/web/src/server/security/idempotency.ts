@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import type { Sql } from 'postgres';
 import { getDb } from '@/server/db/client';
 import { getServerEnv } from '@/server/env';
 import { requireUuid } from './input';
@@ -105,6 +106,7 @@ type IdempotencyDependencies = {
   store?: IdempotencyStore;
   resultResourceId?: string;
   responseStatus?: number;
+  sql?: Sql;
 };
 
 export async function claimIdempotency(
@@ -128,7 +130,7 @@ export async function claimIdempotency(
     };
   }
 
-  await store.insert({
+  const inserted = await store.insert({
     actorScope: input.actorScope,
     operation: input.operation,
     key: input.key,
@@ -136,5 +138,49 @@ export async function claimIdempotency(
     resultResourceId: dependencies.resultResourceId ?? '',
     responseStatus: dependencies.responseStatus ?? 202,
   });
+  if (inserted.payloadDigest !== payloadDigest) {
+    throw new IdempotencyConflictError();
+  }
+  if (inserted.resultResourceId) {
+    return {
+      kind: 'REPLAY',
+      resultResourceId: inserted.resultResourceId,
+      responseStatus: inserted.responseStatus,
+    };
+  }
   return { kind: 'NEW' };
+}
+
+export type IdempotencyBindingInput = {
+  actorScope: string;
+  operation: string;
+  key: string;
+  resultResourceId: string;
+  responseStatus: number;
+};
+
+export async function bindIdempotencyResult(
+  input: IdempotencyBindingInput,
+  dependencies: Pick<IdempotencyDependencies, 'sql'> = {},
+): Promise<void> {
+  requireUuid(input.key, 'Idempotency-Key');
+  requireUuid(input.resultResourceId, 'resultResourceId');
+  if (!input.actorScope.trim() || !input.operation.trim()) {
+    throw new TypeError('Idempotency binding scope is required');
+  }
+  if (!Number.isInteger(input.responseStatus) || input.responseStatus < 100 || input.responseStatus > 599) {
+    throw new TypeError('Invalid idempotency response status');
+  }
+
+  const sql = dependencies.sql ?? getDb();
+  await sql`
+    update private.request_idempotency
+    set result_resource_id = ${input.resultResourceId}::uuid,
+        response_status = ${input.responseStatus},
+        updated_at = now()
+    where actor_scope = ${input.actorScope}
+      and operation = ${input.operation}
+      and idempotency_key = ${input.key}::uuid
+      and (result_resource_id is null or result_resource_id = ${input.resultResourceId}::uuid)
+  `;
 }
