@@ -1,0 +1,8 @@
+{
+  "version": "final-answer-v1",
+  "cases": [
+    { "id": "three-of-four-covered", "expected": "FAILED" },
+    { "id": "four-of-four-covered", "expected": "SUCCESS" },
+    { "id": "unknown-id", "expected": "UNKNOWN_KEY_POINT_ID" }
+  ]
+}

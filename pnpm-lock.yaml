@@ -113,6 +113,9 @@ importers:
       '@turtle-soup/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
       postgres:
         specifier: 3.4.9
         version: 3.4.9

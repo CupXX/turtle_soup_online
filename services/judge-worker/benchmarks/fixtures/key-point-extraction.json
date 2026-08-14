@@ -1,0 +1,10 @@
+{
+  "version": "key-point-extraction-v1",
+  "cases": [
+    { "id": "exactly-three-independent-points", "expectedCount": 3 },
+    { "id": "exactly-five-independent-points", "expectedCount": 5 },
+    { "id": "reject-two-points", "expected": "SCHEMA_INVALID" },
+    { "id": "reject-six-points", "expected": "SCHEMA_INVALID" },
+    { "id": "reject-unsupported-fact", "expected": "SCHEMA_INVALID" }
+  ]
+}

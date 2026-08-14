@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "benchmark": "tsx benchmarks/run.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@turtle-soup/contracts": "workspace:*",
+    "ajv": "8.20.0",
     "postgres": "3.4.9",
     "zod": "4.4.3"
   },

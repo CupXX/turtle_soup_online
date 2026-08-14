@@ -1,0 +1,9 @@
+{
+  "version": "semantic-policy-v1",
+  "cases": [
+    { "id": "true-core-claim", "expected": "YES" },
+    { "id": "false-core-claim", "expected": "NO" },
+    { "id": "mixed-claim", "expected": "BOTH" },
+    { "id": "unrelated-detail", "expected": "IRRELEVANT" }
+  ]
+}
