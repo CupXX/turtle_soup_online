@@ -4,11 +4,12 @@ import { FormEvent, useState } from 'react';
 
 type ForceEndControlProps = {
   disabled?: boolean;
+  disabledMessage?: string;
   error?: string;
   onConfirm: () => void | Promise<void>;
 };
 
-export function ForceEndControl({ disabled = false, error, onConfirm }: ForceEndControlProps) {
+export function ForceEndControl({ disabled = false, disabledMessage, error, onConfirm }: ForceEndControlProps) {
   const [expanded, setExpanded] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
@@ -31,6 +32,7 @@ export function ForceEndControl({ disabled = false, error, onConfirm }: ForceEnd
       <p className="eyebrow">不可逆操作</p>
       <h2 id="force-end-title">结束当前游戏</h2>
       <p className="muted">强制结束会公开最终揭示并取消尚未判定的动作。只有确认短语正确时按钮才会生效。</p>
+      {disabled && disabledMessage ? <p className="muted">{disabledMessage}</p> : null}
       {!expanded ? (
         <button className="quiet-button" type="button" onClick={() => setExpanded(true)} disabled={disabled}>结束当前游戏</button>
       ) : (

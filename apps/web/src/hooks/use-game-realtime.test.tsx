@@ -82,4 +82,16 @@ describe('useGameRealtime', () => {
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
+
+  it('starts realtime after an initially empty page receives its first snapshot', async () => {
+    const fetchSnapshot = vi.fn().mockResolvedValue(snapshot);
+    const subscribe = vi.fn(() => ({ unsubscribe: vi.fn() }));
+    const { result } = renderHook(() => useGameRealtime(null, { fetchSnapshot, subscribe }));
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(subscribe).toHaveBeenCalledWith('game-1', expect.any(Function), expect.any(Function));
+  });
 });

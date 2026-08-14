@@ -32,7 +32,7 @@ export function useGameRealtime(
   const [snapshot, setSnapshot] = useState<PublicGameSnapshot | null>(initial);
   const [connection, setConnection] = useState<ConnectionStatus>('CONNECTED');
   const fetchRef = useRef(options.fetchSnapshot);
-  const gameId = options.gameId;
+  const gameId = snapshot?.game.id ?? options.gameId;
   const subscribe = options.subscribe;
 
   useEffect(() => {

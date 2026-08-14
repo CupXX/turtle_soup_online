@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
 import { createBrowserSupabase, createRealtimeSubscribe } from '@/lib/supabase-browser';
+import { createPlayerSession, fetchCurrentGame, joinCurrentGame, postQuestion } from '@/lib/game-api';
 import { useGameRealtime, type RealtimeSubscribe } from '@/hooks/use-game-realtime';
 import { FinalAnswerModal } from './final-answer-modal';
 import { GameHeader } from './game-header';
@@ -22,6 +23,7 @@ export type GameClientProps = {
   currentPlayerId?: string;
   requireNickname?: boolean;
   demo?: boolean;
+  enableFinalAnswer?: boolean;
   onNicknameSubmit?: (nickname: string) => void | Promise<void>;
   onMessageSubmit?: (content: string) => MessageSubmitResult | Promise<MessageSubmitResult>;
   onFinalAnswerSubmit?: (answer: string) => FinalAnswerResult | Promise<FinalAnswerResult>;
@@ -35,19 +37,10 @@ type PrivateFinalAnswer = {
 };
 
 function createClientId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-async function fetchCurrentSnapshot(): Promise<PublicGameSnapshot | null> {
-  const response = await fetch('/api/game/current', { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error('当前局面暂时无法刷新');
-  }
-  const body = (await response.json()) as { data?: PublicGameSnapshot | null };
-  return body.data ?? null;
 }
 
 export function GameClient({
@@ -55,6 +48,7 @@ export function GameClient({
   currentPlayerId,
   requireNickname = false,
   demo = false,
+  enableFinalAnswer = false,
   onNicknameSubmit,
   onMessageSubmit,
   onFinalAnswerSubmit,
@@ -62,6 +56,7 @@ export function GameClient({
   subscribe,
 }: GameClientProps) {
   const [nickname, setNickname] = useState('');
+  const [sessionPlayerId, setSessionPlayerId] = useState(currentPlayerId);
   const [nicknameBusy, setNicknameBusy] = useState(false);
   const [nicknameError, setNicknameError] = useState<string>();
   const [localMessages, setLocalMessages] = useState<GameMessage[]>([]);
@@ -72,14 +67,14 @@ export function GameClient({
   const browserSupabase = useMemo(() => createBrowserSupabase(), []);
   const defaultSubscribe = useMemo(() => createRealtimeSubscribe(browserSupabase), [browserSupabase]);
   const effectiveSubscribe = subscribe ?? defaultSubscribe;
-  const effectiveFetch = fetchSnapshot ?? (effectiveSubscribe ? fetchCurrentSnapshot : undefined);
+  const effectiveFetch = fetchSnapshot ?? fetchCurrentGame;
   const realtime = useGameRealtime(initialSnapshot, {
     gameId: initialSnapshot?.game.id,
     fetchSnapshot: effectiveFetch,
     subscribe: effectiveSubscribe,
   });
-  const snapshot = realtime.snapshot;
-  const activePlayerId = currentPlayerId ?? snapshot?.players[0]?.id;
+  const { snapshot, refresh: refreshSnapshot } = realtime;
+  const activePlayerId = sessionPlayerId ?? snapshot?.players[0]?.id;
   const activePlayer = snapshot?.players.find((player) => player.id === activePlayerId) ?? snapshot?.players[0];
   const visibleMessages = useMemo(() => {
     const serverIds = new Set(snapshot?.messages.map((message) => message.id));
@@ -90,14 +85,21 @@ export function GameClient({
     setNicknameBusy(true);
     setNicknameError(undefined);
     try {
-      await onNicknameSubmit?.(nextNickname);
+      if (onNicknameSubmit) {
+        await onNicknameSubmit(nextNickname);
+      } else if (!demo) {
+        const session = await createPlayerSession(nextNickname);
+        setSessionPlayerId(session.playerId);
+        await joinCurrentGame();
+        await refreshSnapshot();
+      }
       setNickname(nextNickname);
     } catch {
       setNicknameError('昵称暂时无法保存，请稍后重试。');
     } finally {
       setNicknameBusy(false);
     }
-  }, [onNicknameSubmit]);
+  }, [demo, onNicknameSubmit, refreshSnapshot]);
 
   const handleMessageSubmit = useCallback((content: string) => {
     if (!snapshot || snapshot.game.status !== 'ACTIVE') return;
@@ -118,12 +120,13 @@ export function GameClient({
     setLocalMessages((messages) => [...messages, localMessage]);
 
     try {
-      const result = onMessageSubmit?.(content);
+      const submit = onMessageSubmit ?? (demo ? undefined : postQuestion);
+      const result = submit?.(content);
       if (result && typeof (result as Promise<MessageSubmitResult>).then === 'function') {
         void (result as Promise<MessageSubmitResult>)
           .then((serverMessage) => {
             if (serverMessage) {
-              setLocalMessages((messages) => messages.filter((message) => message.id !== localMessage.id));
+              setLocalMessages((messages) => messages.map((message) => message.id === localMessage.id ? serverMessage : message));
             }
           })
           .catch(() => {
@@ -131,13 +134,13 @@ export function GameClient({
             setMessageError('问题发送失败，请稍后重试。');
           });
       } else if (result && typeof result === 'object') {
-        setLocalMessages((messages) => messages.filter((message) => message.id !== localMessage.id));
+        setLocalMessages((messages) => messages.map((message) => message.id === localMessage.id ? result as PublicMessage : message));
       }
     } catch {
       setLocalMessages((messages) => messages.filter((message) => message.id !== localMessage.id));
       setMessageError('问题发送失败，请稍后重试。');
     }
-  }, [activePlayerId, onMessageSubmit, snapshot, visibleMessages]);
+  }, [activePlayerId, demo, onMessageSubmit, snapshot, visibleMessages]);
 
   const handleFinalAnswerSubmit = useCallback((answer: string) => {
     setFinalAnswerOpen(false);
@@ -161,7 +164,7 @@ export function GameClient({
     }
   }, [onFinalAnswerSubmit]);
 
-  if (requireNickname && !nickname && !currentPlayerId) {
+  if (requireNickname && !nickname && !sessionPlayerId) {
     return <NicknameGate onSubmit={handleNicknameSubmit} error={nicknameError} busy={nicknameBusy} />;
   }
 
@@ -196,10 +199,11 @@ export function GameClient({
             ) : null}
             <MessageComposer disabled={snapshot.game.status !== 'ACTIVE'} error={messageError} onSubmit={handleMessageSubmit} />
             <div className="final-answer-action">
-              <button className="secondary-button" type="button" onClick={() => setFinalAnswerOpen(true)} disabled={snapshot.game.status !== 'ACTIVE'}>
+              <button className="secondary-button" type="button" onClick={() => setFinalAnswerOpen(true)} disabled={!enableFinalAnswer || snapshot.game.status !== 'ACTIVE'}>
                 提交最终答案
               </button>
-              {snapshot.game.status === 'ENDED' ? <span className="muted">本局已结束，输入已停用。</span> : null}
+              {!enableFinalAnswer ? <span className="muted">最终答案功能将在后续阶段开放。</span> : null}
+              {enableFinalAnswer && snapshot.game.status === 'ENDED' ? <span className="muted">本局已结束，输入已停用。</span> : null}
             </div>
           </div>
           <aside className="dashboard-sidebar">
@@ -212,7 +216,7 @@ export function GameClient({
           </aside>
         </div>
       </div>
-      <FinalAnswerModal key={finalAnswerOpen ? 'open' : 'closed'} open={finalAnswerOpen} disabled={snapshot.game.status !== 'ACTIVE'} onClose={() => setFinalAnswerOpen(false)} onSubmit={handleFinalAnswerSubmit} />
+      <FinalAnswerModal key={finalAnswerOpen ? 'open' : 'closed'} open={finalAnswerOpen} disabled={!enableFinalAnswer || snapshot.game.status !== 'ACTIVE'} onClose={() => setFinalAnswerOpen(false)} onSubmit={handleFinalAnswerSubmit} />
     </main>
   );
 }
