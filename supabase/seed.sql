@@ -1,0 +1,2 @@
+-- The game starts empty. Test fixtures are inserted by pgTAP tests so no
+-- player names, puzzle text, or secrets are committed to the repository.
