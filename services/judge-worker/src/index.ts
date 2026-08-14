@@ -1,6 +1,7 @@
 export * from './config.js';
 export * from './db/client.js';
 export * from './db/complete-extraction.js';
+export * from './db/complete-question.js';
 export * from './db/heartbeat.js';
 export * from './db/queue.js';
 export * from './runtime/fake-semantic-judge.js';
@@ -11,4 +12,5 @@ export * from './skills/key-point-extraction.js';
 export * from './skills/question-judge.js';
 export * from './skills/validate-result.js';
 export * from './processors/extraction-processor.js';
+export * from './processors/question-processor.js';
 export * from './worker.js';
