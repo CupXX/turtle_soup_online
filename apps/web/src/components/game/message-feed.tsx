@@ -1,4 +1,4 @@
-import type { PublicPlayer } from '@turtle-soup/contracts';
+import type { PublicGameEvent, PublicPlayer } from '@turtle-soup/contracts';
 import { MessageRow, type GameMessage } from './message-row';
 
 export type { GameMessage } from './message-row';
@@ -6,10 +6,17 @@ export type { GameMessage } from './message-row';
 type MessageFeedProps = {
   messages: GameMessage[];
   players: PublicPlayer[];
+  events?: PublicGameEvent[];
   onChallenge?: (message: GameMessage) => void;
 };
 
-export function MessageFeed({ messages, players, onChallenge }: MessageFeedProps) {
+function eventLabel(eventType: PublicGameEvent['eventType']): string {
+  if (eventType === 'FINAL_ANSWER_FAILED') return 'Final answer failed';
+  if (eventType === 'FINAL_ANSWER_SUCCEEDED') return 'Final answer succeeded';
+  return 'Game ended by admin';
+}
+
+export function MessageFeed({ messages, players, events = [], onChallenge }: MessageFeedProps) {
   const names = new Map(players.map((player) => [player.id, player.displayNickname]));
   return (
     <section className="feed-panel" aria-labelledby="feed-title">
@@ -29,6 +36,18 @@ export function MessageFeed({ messages, players, onChallenge }: MessageFeedProps
       ) : (
         <div className="empty-state"><strong>还没有问题</strong><span>从故事表面开始，提出第一个可验证的问题。</span></div>
       )}
+      {events.length ? (
+        <div className="message-event-list" aria-live="polite">
+          {events.slice().sort((left, right) => left.sequenceNo - right.sequenceNo).map((event) => (
+            <article className="message-event-row" key={event.id} data-event-type={event.eventType}>
+              <span>#{event.sequenceNo}</span>
+              <strong>{event.playerId ? names.get(event.playerId) ?? 'Anonymous player' : 'System'}</strong>
+              <span>{eventLabel(event.eventType)}</span>
+              {event.awardedPoints > 0 ? <span>+{event.awardedPoints}</span> : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

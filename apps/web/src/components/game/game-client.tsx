@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
 import { createBrowserSupabase, createRealtimeSubscribe } from '@/lib/supabase-browser';
-import { createPlayerSession, fetchCurrentGame, joinCurrentGame, postQuestion } from '@/lib/game-api';
+import { createPlayerSession, fetchCurrentGame, joinCurrentGame, postFinalAnswer, postQuestion, type FinalAnswerReceipt } from '@/lib/game-api';
 import { useGameRealtime, type RealtimeSubscribe } from '@/hooks/use-game-realtime';
 import { FinalAnswerModal } from './final-answer-modal';
 import { GameHeader } from './game-header';
@@ -16,7 +16,7 @@ import { PlayerStatsPanel } from './player-stats-panel';
 import { PuzzlePanel } from './puzzle-panel';
 
 type MessageSubmitResult = PublicMessage | null | void;
-type FinalAnswerResult = 'FAILED' | 'SUCCEEDED' | void;
+type FinalAnswerResult = FinalAnswerReceipt | 'FAILED' | 'SUCCEEDED' | void;
 
 export type GameClientProps = {
   initialSnapshot: PublicGameSnapshot | null;
@@ -34,6 +34,7 @@ export type GameClientProps = {
 type PrivateFinalAnswer = {
   answer: string;
   status: 'SUBMITTED' | 'FAILED';
+  sequenceNo?: number;
 };
 
 function createClientId(prefix: string): string {
@@ -48,7 +49,7 @@ export function GameClient({
   currentPlayerId,
   requireNickname = false,
   demo = false,
-  enableFinalAnswer = false,
+  enableFinalAnswer = true,
   onNicknameSubmit,
   onMessageSubmit,
   onFinalAnswerSubmit,
@@ -80,6 +81,21 @@ export function GameClient({
     const serverIds = new Set(snapshot?.messages.map((message) => message.id));
     return [...(snapshot?.messages ?? []), ...localMessages.filter((message) => !serverIds.has(message.id))];
   }, [localMessages, snapshot?.messages]);
+
+  useEffect(() => {
+    const sequenceNo = privateFinalAnswer?.sequenceNo;
+    if (!sequenceNo) return;
+    const event = snapshot?.events.find((candidate) => candidate.sequenceNo === sequenceNo && candidate.playerId === activePlayerId);
+    if (!event) {
+      if (snapshot?.game.status === 'ENDED') setPrivateFinalAnswer(undefined);
+      return;
+    }
+    if (event.eventType === 'FINAL_ANSWER_FAILED') {
+      setPrivateFinalAnswer((current) => current ? { ...current, status: 'FAILED' } : current);
+    } else if (event.eventType === 'FINAL_ANSWER_SUCCEEDED' || snapshot?.game.status === 'ENDED') {
+      setPrivateFinalAnswer(undefined);
+    }
+  }, [activePlayerId, privateFinalAnswer?.sequenceNo, snapshot?.events, snapshot?.game.status]);
 
   const handleNicknameSubmit = useCallback(async (nextNickname: string) => {
     setNicknameBusy(true);
@@ -146,23 +162,29 @@ export function GameClient({
     setFinalAnswerOpen(false);
     setPrivateFinalAnswer({ answer, status: 'SUBMITTED' });
     try {
-      const result = onFinalAnswerSubmit?.(answer);
+      const submit = onFinalAnswerSubmit ?? (demo ? undefined : postFinalAnswer);
+      const result = submit?.(answer);
       if (result && typeof (result as Promise<FinalAnswerResult>).then === 'function') {
         void (result as Promise<FinalAnswerResult>)
           .then((status) => {
             if (status === 'FAILED') setPrivateFinalAnswer({ answer, status: 'FAILED' });
             if (status === 'SUCCEEDED') setPrivateFinalAnswer(undefined);
+            if (status && typeof status === 'object' && 'sequenceNo' in status) {
+              setPrivateFinalAnswer({ answer, status: 'SUBMITTED', sequenceNo: status.sequenceNo });
+            }
           })
           .catch(() => setPrivateFinalAnswer({ answer, status: 'FAILED' }));
       } else if (result === 'FAILED') {
         setPrivateFinalAnswer({ answer, status: 'FAILED' });
       } else if (result === 'SUCCEEDED') {
         setPrivateFinalAnswer(undefined);
+      } else if (result && typeof result === 'object' && 'sequenceNo' in result) {
+        setPrivateFinalAnswer({ answer, status: 'SUBMITTED', sequenceNo: result.sequenceNo });
       }
     } catch {
       setPrivateFinalAnswer({ answer, status: 'FAILED' });
     }
-  }, [onFinalAnswerSubmit]);
+  }, [demo, onFinalAnswerSubmit]);
 
   if (requireNickname && !nickname && !sessionPlayerId) {
     return <NicknameGate onSubmit={handleNicknameSubmit} error={nicknameError} busy={nicknameBusy} />;
@@ -189,7 +211,7 @@ export function GameClient({
         <div className="dashboard-grid">
           <div className="dashboard-main">
             <PuzzlePanel game={snapshot.game} />
-            <MessageFeed messages={visibleMessages} players={snapshot.players} />
+            <MessageFeed messages={visibleMessages} players={snapshot.players} events={snapshot.events} />
             <GameRevealPanel reveal={snapshot.reveal} />
             {privateFinalAnswer ? (
               <aside className="private-answer-note" aria-live="polite">

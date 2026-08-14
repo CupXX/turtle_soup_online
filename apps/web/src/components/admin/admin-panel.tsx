@@ -6,7 +6,9 @@ import {
   adminLogin,
   createGame,
   fetchAdminStatus,
+  forceEndGame as forceEndRequest,
   replacePreparation,
+  retryBlockedAction as retryBlockedActionRequest,
   retryExtraction as retryExtractionRequest,
   type AdminStatusResponse,
 } from '@/lib/game-api';
@@ -20,6 +22,7 @@ type AdminPanelProps = {
   onLogin?: (input: AdminLoginInput) => void | Promise<void>;
   onPreparationSubmit?: (input: GamePreparationInput) => void | Promise<void>;
   onRetryExtraction?: () => void | Promise<void>;
+  onRetryBlockedAction?: () => void | Promise<void>;
   onForceEnd?: () => void | Promise<void>;
 };
 
@@ -30,7 +33,8 @@ function statusForExtraction(value: string | null): ExtractionStatusValue {
   return 'IDLE';
 }
 
-export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetryExtraction, onForceEnd }: AdminPanelProps) {
+export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetryExtraction, onRetryBlockedAction, onForceEnd: onForceEndProp }: AdminPanelProps) {
+  const onForceEnd = onForceEndProp ?? (!demo ? forceEndRequest : undefined);
   const [authenticated, setAuthenticated] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -126,10 +130,21 @@ export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetry
 
   async function forceEnd() {
     try {
-      await onForceEnd?.();
+      if (onForceEnd) await onForceEnd();
+      else if (!demo) await forceEndRequest();
       setNotice('已提交强制结束请求。');
     } catch {
       setNotice('强制结束请求失败，请确认当前游戏仍处于进行中。');
+    }
+  }
+
+  async function retryBlockedAction() {
+    try {
+      if (onRetryBlockedAction) await onRetryBlockedAction();
+      else if (!demo) await retryBlockedActionRequest();
+      setNotice('Blocked action queued for retry.');
+    } catch {
+      setNotice('Unable to retry the blocked action.');
     }
   }
 
@@ -153,10 +168,23 @@ export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetry
           <div className="admin-main">
             <GamePreparationForm onSubmit={handlePreparation} busy={busy} error={error} />
             <ExtractionStatus status={status} message={statusMessage} onRetry={retryExtraction} />
+            {adminStatus?.actionStatus === 'BLOCKED' ? (
+              <section className="admin-card status-card" aria-labelledby="blocked-action-title">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Queue control</p>
+                    <h2 id="blocked-action-title">判定队列已阻塞</h2>
+                  </div>
+                  <span className="status-pill status-blocked">BLOCKED</span>
+                </div>
+                <p className="muted">Later actions wait for the current head and are never overtaken.</p>
+                <button className="quiet-button" type="button" onClick={retryBlockedAction}>重试当前阻塞</button>
+              </section>
+            ) : null}
           </div>
           <aside className="admin-sidebar">
             <ForceEndControl
-              disabled={!onForceEnd}
+              disabled={demo || adminStatus?.gameStatus !== 'ACTIVE'}
               disabledMessage={!onForceEnd ? '强制结束将在后续阶段开放。' : undefined}
               onConfirm={forceEnd}
             />
