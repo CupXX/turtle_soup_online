@@ -4,8 +4,9 @@ import {
   RETRY_SECONDS,
   claimNextAction,
   claimNextExtraction,
-  markBlocked,
-  recordRetry,
+  markExtractionBlocked,
+  recordActionRetry,
+  recordExtractionRetry,
   retryDelaySeconds,
 } from './queue.js';
 
@@ -88,23 +89,48 @@ describe('durable queue', () => {
     expect(query).not.toContain('skip locked');
   });
 
-  it('records retry backoff and clears the previous lease', async () => {
+  it('records extraction retry backoff only in the extraction queue', async () => {
     const fake = fakeTransaction([[]]);
 
-    await expect(recordRetry(actionId, 2, 'TIMEOUT', { transaction: fake.transaction })).resolves.toBeUndefined();
+    await expect(recordExtractionRetry(actionId, 2, 'TIMEOUT', { transaction: fake.transaction })).resolves.toBeUndefined();
 
     const query = fake.calls[0].toLowerCase();
+    expect(query).toContain('private.key_point_extraction_jobs');
+    expect(query).not.toContain('private.game_actions');
     expect(query).toContain("status = 'retry'");
     expect(query).toContain('lease_owner = null');
     expect(query).toContain('error_code');
   });
 
-  it('marks a queue item blocked after the final failed attempt', async () => {
+  it('records action retry backoff only in the action queue', async () => {
     const fake = fakeTransaction([[]]);
 
-    await expect(markBlocked(actionId, 'SCHEMA_INVALID', { transaction: fake.transaction })).resolves.toBeUndefined();
+    await expect(recordActionRetry(actionId, 2, 'TIMEOUT', { transaction: fake.transaction })).resolves.toBeUndefined();
+
+    const query = fake.calls[0].toLowerCase();
+    expect(query).toContain('private.game_actions');
+    expect(query).not.toContain('private.key_point_extraction_jobs');
+    expect(query).toContain("status = 'retry'");
+    expect(query).toContain('lease_expires_at = null');
+  });
+
+  it('marks an extraction queue item blocked after the final failed attempt', async () => {
+    const fake = fakeTransaction([[]]);
+
+    await expect(markExtractionBlocked(actionId, 'SCHEMA_INVALID', { transaction: fake.transaction })).resolves.toBeUndefined();
 
     expect(fake.calls[0].toLowerCase()).toContain("status = 'blocked'");
+    expect(fake.calls[0].toLowerCase()).toContain('private.key_point_extraction_jobs');
     expect(fake.calls[0].toLowerCase()).toContain('lease_expires_at = null');
+  });
+
+  it('marks an action queue item blocked after the final failed attempt', async () => {
+    const fake = fakeTransaction([[]]);
+
+    await expect(recordActionRetry(actionId, 4, 'SCHEMA_INVALID', { transaction: fake.transaction })).resolves.toBeUndefined();
+
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0].toLowerCase()).toContain("status = 'blocked'");
+    expect(fake.calls[0].toLowerCase()).toContain('private.game_actions');
   });
 });

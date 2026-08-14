@@ -158,7 +158,7 @@ export async function claimNextAction(
   });
 }
 
-export async function recordRetry(
+export async function recordExtractionRetry(
   jobId: string,
   attempt: number,
   code: JudgeErrorCode,
@@ -166,7 +166,7 @@ export async function recordRetry(
 ): Promise<void> {
   const delay = retryDelaySeconds(attempt);
   if (delay === null) {
-    await markBlocked(jobId, code, dependencies);
+    await markExtractionBlocked(jobId, code, dependencies);
     return;
   }
 
@@ -187,7 +187,7 @@ export async function recordRetry(
   });
 }
 
-export async function markBlocked(
+export async function markExtractionBlocked(
   jobId: string,
   code: JudgeErrorCode,
   dependencies: QueueDependencies = {},
@@ -201,6 +201,53 @@ export async function markBlocked(
           error_code = ${code},
           updated_at = now()
       where id = ${jobId}
+    `;
+  });
+}
+
+export async function recordActionRetry(
+  actionId: string,
+  attempt: number,
+  code: JudgeErrorCode,
+  dependencies: QueueDependencies = {},
+): Promise<void> {
+  const delay = retryDelaySeconds(attempt);
+  if (delay === null) {
+    await markActionBlocked(actionId, code, dependencies);
+    return;
+  }
+
+  const nextAttemptAt = new Date((dependencies.now ?? new Date()).getTime() + delay * 1000);
+  await transactionFor(dependencies)(async (sql) => {
+    await sql`
+      update private.game_actions
+      set status = 'RETRY',
+          attempt_count = ${attempt},
+          next_attempt_at = ${nextAttemptAt},
+          lease_owner = null,
+          lease_expires_at = null,
+          error_code = ${code},
+          updated_at = now()
+      where id = ${actionId}
+        and status = 'PROCESSING'
+    `;
+  });
+}
+
+export async function markActionBlocked(
+  actionId: string,
+  code: JudgeErrorCode,
+  dependencies: QueueDependencies = {},
+): Promise<void> {
+  await transactionFor(dependencies)(async (sql) => {
+    await sql`
+      update private.game_actions
+      set status = 'BLOCKED',
+          lease_owner = null,
+          lease_expires_at = null,
+          error_code = ${code},
+          updated_at = now()
+      where id = ${actionId}
     `;
   });
 }

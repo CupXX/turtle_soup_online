@@ -13,4 +13,7 @@ export * from './skills/question-judge.js';
 export * from './skills/validate-result.js';
 export * from './processors/extraction-processor.js';
 export * from './processors/question-processor.js';
+export * from './processors/action-processor.js';
+export * from './runtime/create-harness-invoker.js';
+export * from './main.js';
 export * from './worker.js';
