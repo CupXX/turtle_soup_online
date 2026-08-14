@@ -1,5 +1,13 @@
 import type { PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
 
+export type FinalAnswerReceipt = {
+  submissionId: string;
+  gameId: string;
+  playerId: string;
+  sequenceNo: number;
+  status: 'PENDING';
+};
+
 export type PlayerSessionResponse = {
   playerId: string;
   displayNickname: string;
@@ -86,6 +94,10 @@ export function joinCurrentGame(): Promise<{ gameId: string }> {
 
 export function postQuestion(content: string): Promise<PublicMessage> {
   return postJson('/api/game/current/messages', { content });
+}
+
+export function postFinalAnswer(answer: string): Promise<FinalAnswerReceipt> {
+  return postJson('/api/game/current/final-answers', { answer });
 }
 
 export function fetchCurrentGame(): Promise<PublicGameSnapshot | null> {
