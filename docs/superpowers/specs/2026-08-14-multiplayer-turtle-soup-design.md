@@ -4,7 +4,7 @@
 
 **Date:** 2026-08-14
 
-**Target MVP concurrency:** At most 10 simultaneous players
+**MVP load-test / verification target:** 10 simultaneous active players
 
 ## 1. Product Summary
 
@@ -71,7 +71,9 @@ Scoring:
 ## 3. Explicit MVP Decisions
 
 - The repository starts empty and requires no compatibility layer.
-- Peak simultaneous player count is at most 10.
+- The MVP load-test and verification target is 10 simultaneous active players.
+  This is not a hard product limit, and the application does not intentionally
+  reject an eleventh player.
 - Supabase Postgres Changes is used for Realtime invalidation. Broadcast, Redis,
   and a separate messaging system are unnecessary for this scale.
 - Nicknames use `trim`, Unicode NFKC normalization, and case-insensitive English
@@ -93,16 +95,26 @@ Scoring:
 
 ## 4. Repository and Service Architecture
 
-The implementation is a Node.js 22 pnpm monorepo:
+The implementation uses one repository. Node.js 22 and pnpm are fixed for the
+Next.js application and shared TypeScript packages. The Judge Worker's
+runtime/language is selected by the Harness feasibility spike based on the
+actual pinned Harness version; the worker is not forced into Node.js if that
+would distort or weaken the supported integration.
 
 ```text
 apps/web                 Next.js UI and authoritative HTTP API
 services/judge-worker    Dockerized queue consumer and Harness integration
-packages/contracts       Shared API, state, event, and Judge schemas
+packages/contracts       Language-neutral schemas plus generated TypeScript types
 packages/game-core       Pure deterministic game rules
 supabase                 Migrations, seed data, and database tests
 docs                     Design, plans, and operational notes
 ```
+
+If the Worker uses a non-Node runtime, it owns the appropriate runtime-specific
+project and lock files inside `services/judge-worker`. Canonical JSON Schemas in
+`packages/contracts` remain the cross-runtime contract; TypeScript bindings are
+generated for the web application rather than treated as the only source the
+Worker can consume.
 
 System flow:
 
@@ -594,12 +606,23 @@ Output:
 
 Rules:
 
-- Array length 3-5.
+- Return exactly 3-5 key points.
+- Each key point is an independent, verifiable core fact.
+- Together the key points cover the essential information required to fully
+  understand and solve the supplied story.
+- Do not mechanically split one fact into multiple points merely to reach the
+  required count.
+- Do not invent or infer story facts unsupported by the supplied full solution.
+- There is no special rule requiring the direct cause of death to be its own
+  key point.
 - Non-empty bounded content.
 - No extra fields.
 - No model-generated IDs.
 - Server generates UUIDs and rejects normalized exact duplicates.
 - Invalid output prevents activation.
+- Activation freezes the extracted key points for that game. Prompt/mechanism
+  versions may improve between games based on observed gameplay, but an ACTIVE
+  game's key points never mutate.
 
 ### 9.4 Question Judge Skill
 
@@ -623,7 +646,53 @@ Rules:
 - BOTH may fully cover a key point.
 - The model never decides whether coverage earns points.
 
-### 9.5 Final-Answer Judge Skill
+### 9.5 Semantic Judging Policy
+
+These rules are source-of-truth behavior for the Question Judge, not merely
+benchmark examples.
+
+#### YES
+
+- Return YES when the player's core semantic claim is correct according to the
+  supplied full solution.
+- Do not require exact wording; semantically equivalent paraphrases count as
+  correct.
+- A reasonable indirect causal relationship counts as related when that causal
+  relationship genuinely exists in the story.
+
+#### NO
+
+- Return NO when the player's core semantic claim is false.
+- Explicit relationship questions are a special form, including “Is X related
+  to this?”, “Does X have anything to do with Y?”, and “Is X relevant to what
+  happened?”.
+- Answer that relationship directly: related -> YES; not related -> NO.
+- Do not normally return IRRELEVANT for an explicit relationship question.
+
+#### BOTH
+
+- Return BOTH when one message contains both a correct claim and an incorrect
+  claim.
+- Also allow BOTH for genuine semantic ambiguity where one reasonable
+  interpretation is correct and another is incorrect.
+- Do not use BOTH as a fallback merely because the model is uncertain.
+- Prefer YES or NO for a clear explicit relationship question.
+
+#### IRRELEVANT
+
+- IRRELEVANT means the requested information has no meaningful value for
+  reconstructing or solving the supplied story. It is not merely a factual
+  truth-value category.
+- A detail may be technically true in the solution and still be IRRELEVANT when
+  learning it does not help solve the puzzle.
+- If a character wore black but clothing color is immaterial, “Was he wearing
+  black?” is IRRELEVANT, while “Was his clothing color related to what
+  happened?” is NO because it explicitly asks about the relationship.
+- A contextless message such as “What about him?” that cannot be interpreted
+  independently is generally IRRELEVANT because conversation history is not
+  used.
+
+### 9.6 Final-Answer Judge Skill
 
 Input contains fixed key points and the private submitted answer.
 
@@ -637,7 +706,7 @@ Output:
 
 It does not output success, missing counts, missing IDs, explanations, or hints.
 
-### 9.6 Provider Configuration
+### 9.7 Provider Configuration
 
 Server-only environment variables:
 
@@ -651,7 +720,7 @@ Provider adapters may use native JSON Schema when supported. Otherwise the same
 output is requested as JSON and strictly validated. Invalid output is retried;
 no heuristic string repair is applied.
 
-### 9.7 Prompt Injection Boundary
+### 9.8 Prompt Injection Boundary
 
 - All puzzle/player fields are explicitly untrusted data.
 - Static instructions and structured input are separated.
@@ -676,6 +745,11 @@ All handlers use the Node.js runtime. Current-state reads use `no-store`.
 | `POST` | `/api/game/current/join` | Idempotently join the current game's statistics |
 | `POST` | `/api/game/current/messages` | Submit a normal message |
 | `POST` | `/api/game/current/final-answers` | Submit a private final answer |
+
+The final-answer response contains a submission ID, action sequence, and PENDING
+status, but does not echo the answer text. The submitting client keeps its own
+text only in volatile in-memory UI state so it can associate that text with the
+event carrying the same action sequence. No server read endpoint is added.
 
 ### 10.2 Admin Routes
 
@@ -721,6 +795,10 @@ Every state-changing request requires an `Idempotency-Key` UUID.
 
 ### 10.5 Rate Limits
 
+Rate limiting is configurable server-side abuse protection, not a Turtle Soup
+gameplay rule. The following values are defaults and may be tuned through
+validated environment configuration without modifying `game-core` behavior:
+
 | Operation | Limit |
 |---|---:|
 | Player join | 10/IP/minute |
@@ -732,6 +810,15 @@ Every state-changing request requires an `Idempotency-Key` UUID.
 Rate-limit responses include `429`, stable error JSON, and `Retry-After`.
 IP-based buckets store a server-secret HMAC of the normalized address rather
 than the raw address.
+
+Configuration keys:
+
+- `RATE_LIMIT_PLAYER_JOIN_PER_MINUTE` (default `10`).
+- `RATE_LIMIT_MESSAGE_PER_PLAYER_PER_MINUTE` (default `12`).
+- `RATE_LIMIT_MESSAGE_PER_IP_PER_MINUTE` (default `30`).
+- `RATE_LIMIT_FINAL_ANSWER_PER_PLAYER_PER_5_MINUTES` (default `3`).
+- `RATE_LIMIT_ADMIN_LOGIN_PER_IP_PER_15_MINUTES` (default `5`).
+- `RATE_LIMIT_ADMIN_WRITE_PER_SESSION_PER_MINUTE` (default `10`).
 
 ### 10.6 Worker Availability
 
@@ -841,7 +928,8 @@ are invalidation signals rather than the sole source of truth:
 - Coalesce events for 100 milliseconds.
 - Refetch `/api/game/current`.
 - Replace server state with the full snapshot.
-- Preserve only local SENDING rows.
+- Preserve local SENDING rows and private in-memory final-answer receipt/text
+  state.
 - Merge messages and events by sequence.
 
 While disconnected, show status and poll the snapshot every five seconds. On
@@ -861,8 +949,24 @@ Zero-question hit rate displays `—`.
 
 ### 11.8 Final Answer and Reveal
 
-The final-answer modal includes a privacy notice and clears answer text after a
-successful API receipt. It never renders submitted text into public history.
+The final-answer modal includes a privacy notice. After a successful API receipt,
+the submitting client retains the submitted text only in React in-memory state
+while waiting for its result; it does not use localStorage, sessionStorage, a
+server read API, or Realtime payload content.
+
+When that submission fails:
+
+- The public event shows only that the player submitted a final answer and
+  failed.
+- Other players never receive or render the answer text.
+- The submitting client may show its locally retained text beside the failure
+  result for the remainder of the current page session.
+- Refreshing, rejoining, navigating away, or replacing it with a later
+  submission may discard the text.
+- Missing counts, missing IDs, explanations, and hints remain hidden.
+
+On success, the client clears the retained text when the game ends. Submitted
+text is never rendered into public history.
 
 After game end:
 
@@ -926,6 +1030,28 @@ Fixtures cover:
 - Final answer covering 4/4 -> success.
 - Chinese paraphrases and incomplete pronoun-only messages.
 
+Semantic-policy fixture matrix:
+
+| Policy rule | Required fixture expectation |
+|---|---|
+| Correct core claim | YES |
+| Same meaning with materially different wording | YES |
+| Genuine indirect causal relationship | YES |
+| False core claim | NO |
+| Explicit relationship that exists | YES, not IRRELEVANT/BOTH |
+| Explicit relationship that does not exist | NO, not IRRELEVANT/BOTH |
+| Correct and incorrect claims in one message | BOTH |
+| Genuine ambiguity with one true and one false reading | BOTH |
+| Clear claim where only model uncertainty exists | Expected semantic verdict, not uncertainty-driven BOTH |
+| Technically true but solution-irrelevant detail | IRRELEVANT |
+| Same irrelevant detail asked as a relationship question | NO |
+| Contextless message requiring conversation history | IRRELEVANT |
+
+Key-point extraction fixtures also verify: exactly 3-5 points; independent and
+verifiable facts; essential-story coverage; no mechanical splitting; no facts
+unsupported by the full solution; no forced death-cause point; and immutability
+after activation.
+
 Provider benchmarks record correctness, schema compliance, latency, token use,
 and cost but do not gate normal CI nondeterministically.
 
@@ -974,13 +1100,15 @@ next-game creation.
 ### Milestone 0: Harness Feasibility Spike
 
 Docker, isolated tool-free single calls, provider switching, schema validation,
-no sensitive persistence, and pinned version. Failure stops implementation for
-user decision.
+no sensitive persistence, pinned version, and an explicit supported
+runtime/language decision for `services/judge-worker`. Failure stops
+implementation for user decision.
 
 ### Milestone 1: Workspace, Contracts, and Game Core
 
-Node.js 22 monorepo, shared schemas, pure game rules, Fake Judge, tests, lint,
-typecheck, and builds.
+Node.js 22 plus pnpm for the web/TypeScript workspace, language-neutral shared
+schemas, the spike-selected Worker project, pure game rules, Fake Judge, tests,
+lint, typecheck, and builds.
 
 ### Milestone 2: Supabase Schema and Security
 
@@ -1009,8 +1137,9 @@ retry, and ended-game controls.
 
 ### Milestone 7: Acceptance and Deployment Readiness
 
-Full two-browser E2E, ten-player burst check, production Next.js build, Docker
-build, environment documentation, and client-payload secret audit.
+Full two-browser E2E, 10-active-player verification run, production Next.js
+build, Docker build, environment documentation, and client-payload secret
+audit. The 10-player run is a load-test target, not an admission limit.
 
 ## 14. Highest-Risk Areas
 
@@ -1060,7 +1189,8 @@ The MVP is complete only when this full flow is verified:
 - Semantic benchmark fixtures run repeatably across configured providers.
 - Next.js production build passes.
 - Judge Worker Docker image starts locally and resumes unfinished work.
-- Ten-player burst verification produces no reorder or duplicate score.
+- The 10-active-player verification run produces no reorder or duplicate score;
+  the product contains no hard rejection for player 11.
 - Client bundles, HTTP payloads, Realtime payloads, and public logs contain no
   hidden game data or secrets.
 - No explicitly out-of-scope feature is implemented.
