@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
 import { createBrowserSupabase, createRealtimeSubscribe } from '@/lib/supabase-browser';
 import { createPlayerSession, fetchCurrentGame, joinCurrentGame, postFinalAnswer, postQuestion, type FinalAnswerReceipt } from '@/lib/game-api';
@@ -34,6 +34,7 @@ export type GameClientProps = {
 type PrivateFinalAnswer = {
   answer: string;
   status: 'SUBMITTED' | 'FAILED';
+  gameId?: string;
   sequenceNo?: number;
 };
 
@@ -82,20 +83,15 @@ export function GameClient({
     return [...(snapshot?.messages ?? []), ...localMessages.filter((message) => !serverIds.has(message.id))];
   }, [localMessages, snapshot?.messages]);
 
-  useEffect(() => {
-    const sequenceNo = privateFinalAnswer?.sequenceNo;
-    if (!sequenceNo) return;
-    const event = snapshot?.events.find((candidate) => candidate.sequenceNo === sequenceNo && candidate.playerId === activePlayerId);
-    if (!event) {
-      if (snapshot?.game.status === 'ENDED') setPrivateFinalAnswer(undefined);
-      return;
-    }
-    if (event.eventType === 'FINAL_ANSWER_FAILED') {
-      setPrivateFinalAnswer((current) => current ? { ...current, status: 'FAILED' } : current);
-    } else if (event.eventType === 'FINAL_ANSWER_SUCCEEDED' || snapshot?.game.status === 'ENDED') {
-      setPrivateFinalAnswer(undefined);
-    }
-  }, [activePlayerId, privateFinalAnswer?.sequenceNo, snapshot?.events, snapshot?.game.status]);
+  const visiblePrivateFinalAnswer = useMemo(() => {
+    const current = privateFinalAnswer;
+    if (!current || !snapshot || (current.gameId && current.gameId !== snapshot.game.id)) return undefined;
+    if (!current.sequenceNo) return current;
+    const event = snapshot.events.find((candidate) => candidate.sequenceNo === current.sequenceNo && candidate.playerId === activePlayerId);
+    if (event?.eventType === 'FINAL_ANSWER_FAILED') return { ...current, status: 'FAILED' as const };
+    if (event?.eventType === 'FINAL_ANSWER_SUCCEEDED' || snapshot.game.status === 'ENDED') return undefined;
+    return current;
+  }, [activePlayerId, privateFinalAnswer, snapshot]);
 
   const handleNicknameSubmit = useCallback(async (nextNickname: string) => {
     setNicknameBusy(true);
@@ -160,31 +156,32 @@ export function GameClient({
 
   const handleFinalAnswerSubmit = useCallback((answer: string) => {
     setFinalAnswerOpen(false);
-    setPrivateFinalAnswer({ answer, status: 'SUBMITTED' });
+    const gameId = snapshot?.game.id;
+    setPrivateFinalAnswer({ answer, status: 'SUBMITTED', gameId });
     try {
       const submit = onFinalAnswerSubmit ?? (demo ? undefined : postFinalAnswer);
       const result = submit?.(answer);
       if (result && typeof (result as Promise<FinalAnswerResult>).then === 'function') {
         void (result as Promise<FinalAnswerResult>)
           .then((status) => {
-            if (status === 'FAILED') setPrivateFinalAnswer({ answer, status: 'FAILED' });
+            if (status === 'FAILED') setPrivateFinalAnswer({ answer, status: 'FAILED', gameId });
             if (status === 'SUCCEEDED') setPrivateFinalAnswer(undefined);
             if (status && typeof status === 'object' && 'sequenceNo' in status) {
-              setPrivateFinalAnswer({ answer, status: 'SUBMITTED', sequenceNo: status.sequenceNo });
+              setPrivateFinalAnswer({ answer, status: 'SUBMITTED', gameId, sequenceNo: status.sequenceNo });
             }
           })
-          .catch(() => setPrivateFinalAnswer({ answer, status: 'FAILED' }));
+          .catch(() => setPrivateFinalAnswer({ answer, status: 'FAILED', gameId }));
       } else if (result === 'FAILED') {
-        setPrivateFinalAnswer({ answer, status: 'FAILED' });
+        setPrivateFinalAnswer({ answer, status: 'FAILED', gameId });
       } else if (result === 'SUCCEEDED') {
         setPrivateFinalAnswer(undefined);
       } else if (result && typeof result === 'object' && 'sequenceNo' in result) {
-        setPrivateFinalAnswer({ answer, status: 'SUBMITTED', sequenceNo: result.sequenceNo });
+        setPrivateFinalAnswer({ answer, status: 'SUBMITTED', gameId, sequenceNo: result.sequenceNo });
       }
     } catch {
-      setPrivateFinalAnswer({ answer, status: 'FAILED' });
+      setPrivateFinalAnswer({ answer, status: 'FAILED', gameId });
     }
-  }, [demo, onFinalAnswerSubmit]);
+  }, [demo, onFinalAnswerSubmit, snapshot]);
 
   if (requireNickname && !nickname && !sessionPlayerId) {
     return <NicknameGate onSubmit={handleNicknameSubmit} error={nicknameError} busy={nicknameBusy} />;
@@ -213,10 +210,10 @@ export function GameClient({
             <PuzzlePanel game={snapshot.game} />
             <MessageFeed messages={visibleMessages} players={snapshot.players} events={snapshot.events} />
             <GameRevealPanel reveal={snapshot.reveal} />
-            {privateFinalAnswer ? (
+            {visiblePrivateFinalAnswer ? (
               <aside className="private-answer-note" aria-live="polite">
-                <strong>{privateFinalAnswer.status === 'FAILED' ? '最终答案判定失败' : '最终答案已私下提交'}</strong>
-                <span>{privateFinalAnswer.status === 'FAILED' ? privateFinalAnswer.answer : '只有你能在本页面看到这条状态。'}</span>
+                <strong>{visiblePrivateFinalAnswer.status === 'FAILED' ? '最终答案判定失败' : '最终答案已私下提交'}</strong>
+                <span>{visiblePrivateFinalAnswer.status === 'FAILED' ? visiblePrivateFinalAnswer.answer : '只有你能在本页面看到这条状态。'}</span>
               </aside>
             ) : null}
             <MessageComposer disabled={snapshot.game.status !== 'ACTIVE'} error={messageError} onSubmit={handleMessageSubmit} />
