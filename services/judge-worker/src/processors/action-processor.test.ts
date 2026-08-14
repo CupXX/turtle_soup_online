@@ -15,7 +15,7 @@ const action: ClaimedAction = {
   leaseExpiresAt: '2099-01-01T00:00:00.000Z',
 };
 
-function dependencies(processQuestion: () => Promise<void>) {
+function dependencies(processQuestion: () => Promise<void>, processFinalAnswer: () => Promise<void> = async () => undefined) {
   const retries: Array<{ code: string; id: string; attempt: number }> = [];
   const blocks: Array<{ code: string; id: string }> = [];
   return {
@@ -26,6 +26,7 @@ function dependencies(processQuestion: () => Promise<void>) {
       workerId: 'worker-1',
       now: new Date('2026-08-15T00:00:00.000Z'),
       processQuestion,
+      processFinalAnswer,
       recordRetry: async (id: string, attempt: number, code: string) => { retries.push({ id, attempt, code }); },
       markBlocked: async (id: string, code: string) => { blocks.push({ id, code }); },
     },
@@ -87,10 +88,12 @@ describe('processClaimedAction', () => {
     expect(fake.blocks).toEqual([]);
   });
 
-  it('does not silently dispatch unsupported final answers in this phase', async () => {
-    const fake = dependencies(async () => undefined);
+  it('dispatches FINAL_ANSWER to final-answer judging', async () => {
+    let processed = 0;
+    const fake = dependencies(async () => undefined, async () => { processed += 1; });
 
-    await expect(processClaimedAction({ ...action, actionType: 'FINAL_ANSWER' }, fake.value))
-      .rejects.toThrow('FINAL_ANSWER_UNAVAILABLE');
+    await processClaimedAction({ ...action, actionType: 'FINAL_ANSWER' }, fake.value);
+
+    expect(processed).toBe(1);
   });
 });

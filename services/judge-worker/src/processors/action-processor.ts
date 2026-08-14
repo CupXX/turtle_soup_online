@@ -5,6 +5,8 @@ import type { WorkerTransaction } from '../db/client.js';
 import { JudgeValidationError } from '../skills/validate-result.js';
 import { SemanticJudgeRuntimeError } from '../runtime/semantic-judge.js';
 import { processQuestion, type ClaimedQuestionAction, type QuestionProcessorDependencies } from './question-processor.js';
+import { processFinalAnswer, type ClaimedFinalAnswerAction, type FinalAnswerProcessorDependencies } from './final-answer-processor.js';
+import { completeFinalAnswer, type CompleteFinalAnswerInput } from '../db/complete-final-answer.js';
 
 type RetryCode = Exclude<JudgeErrorCode, 'LEASE_LOST'>;
 
@@ -15,6 +17,7 @@ export type ActionProcessorDependencies = {
   transaction?: WorkerTransaction;
   now?: Date;
   processQuestion?: (action: ClaimedQuestionAction, dependencies: QuestionProcessorDependencies) => Promise<void>;
+  processFinalAnswer?: (action: ClaimedFinalAnswerAction, dependencies: FinalAnswerProcessorDependencies) => Promise<void>;
   recordRetry?: (actionId: string, attempt: number, code: RetryCode) => Promise<void>;
   markBlocked?: (actionId: string, code: RetryCode) => Promise<void>;
 };
@@ -52,19 +55,28 @@ export async function processClaimedAction(
 ): Promise<void> {
   const now = dependencies.now ?? new Date();
   if (!leaseIsLive(action, now)) return;
-  if (action.actionType !== 'NORMAL_MESSAGE') {
-    throw new Error('FINAL_ANSWER_UNAVAILABLE');
-  }
 
   try {
-    const runQuestion = dependencies.processQuestion ?? processQuestion;
-    await runQuestion(action as ClaimedQuestionAction, {
-      judge: dependencies.judge,
-      workerId: dependencies.workerId,
-      sql: dependencies.sql,
-      transaction: dependencies.transaction,
-      now: dependencies.now,
-    });
+    if (action.actionType === 'NORMAL_MESSAGE') {
+      const runQuestion = dependencies.processQuestion ?? processQuestion;
+      await runQuestion(action as ClaimedQuestionAction, {
+        judge: dependencies.judge,
+        workerId: dependencies.workerId,
+        sql: dependencies.sql,
+        transaction: dependencies.transaction,
+        now: dependencies.now,
+      });
+    } else {
+      const runFinalAnswer = dependencies.processFinalAnswer ?? processFinalAnswer;
+      await runFinalAnswer(action as ClaimedFinalAnswerAction, {
+        judge: dependencies.judge,
+        workerId: dependencies.workerId,
+        sql: dependencies.sql,
+        completeFinalAnswer: dependencies.transaction
+          ? (input: CompleteFinalAnswerInput) => completeFinalAnswer(input, { transaction: dependencies.transaction, now: dependencies.now })
+          : undefined,
+      });
+    }
   } catch (error) {
     const code = retryCode(error);
     if (!code || code === 'LEASE_LOST') return;
