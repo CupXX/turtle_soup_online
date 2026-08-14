@@ -1,6 +1,6 @@
 begin;
 
-select plan(42);
+select plan(52);
 
 select ok(has_schema_privilege('anon', 'api', 'USAGE'), 'anon can use the exposed api schema');
 select ok(not has_schema_privilege('anon', 'private', 'USAGE'), 'anon cannot use the private schema');
@@ -39,13 +39,23 @@ select ok(has_table_privilege('game_web', 'api.messages', 'INSERT'), 'web role c
 select ok(not has_table_privilege('game_web', 'api.messages', 'UPDATE'), 'web role cannot publish message verdicts');
 select ok(has_table_privilege('game_web', 'private.game_actions', 'SELECT'), 'web role can inspect action idempotency');
 select ok(has_table_privilege('game_web', 'private.game_actions', 'INSERT'), 'web role can enqueue normal actions');
-select ok(not has_table_privilege('game_web', 'private.game_actions', 'UPDATE'), 'web role cannot lease or complete actions');
+select ok(has_table_privilege('game_web', 'private.game_actions', 'UPDATE'), 'web role can cancel or retry actions through the admin boundary');
+select ok(has_table_privilege('game_web', 'private.final_answer_submissions', 'INSERT'), 'web role can store private final-answer receipts');
+select ok(has_table_privilege('game_web', 'private.key_points', 'SELECT'), 'web role can copy fixed key points during force end');
+select ok(has_table_privilege('game_web', 'api.game_events', 'INSERT'), 'web role can publish force-end events');
+select ok(has_table_privilege('game_web', 'api.game_reveals', 'INSERT'), 'web role can publish force-end reveals');
+select ok(has_table_privilege('game_web', 'api.revealed_key_points', 'INSERT'), 'web role can publish force-end key points');
 select ok(has_table_privilege('game_web', 'private.request_idempotency', 'UPDATE'), 'web role can bind request idempotency results');
 select ok(not has_table_privilege('game_web', 'private.judge_attempts', 'SELECT'), 'web role cannot read judge attempts');
 select ok(not has_table_privilege('game_web', 'private.key_point_claims', 'INSERT'), 'web role cannot award key-point claims');
 select ok(has_table_privilege('judge_worker', 'private.game_secrets', 'SELECT'), 'worker role can read the current secret input');
 select ok(has_table_privilege('judge_worker', 'private.key_points', 'INSERT'), 'worker role can publish extracted key points');
 select ok(has_table_privilege('judge_worker', 'private.key_point_claims', 'INSERT'), 'worker role can record first-hit claims');
+select ok(has_table_privilege('judge_worker', 'private.final_answer_submissions', 'SELECT'), 'worker role can read private final-answer bodies');
+select ok(has_table_privilege('judge_worker', 'private.final_answer_submissions', 'UPDATE'), 'worker role can complete private final-answer receipts');
+select ok(has_table_privilege('judge_worker', 'api.game_events', 'INSERT'), 'worker role can publish final-answer events');
+select ok(has_table_privilege('judge_worker', 'api.game_reveals', 'INSERT'), 'worker role can publish success reveals');
+select ok(has_table_privilege('judge_worker', 'api.revealed_key_points', 'INSERT'), 'worker role can publish success key points');
 select ok(has_table_privilege('judge_worker', 'private.worker_heartbeats', 'INSERT'), 'worker role can create its heartbeat');
 select ok(has_table_privilege('judge_worker', 'private.worker_heartbeats', 'SELECT'), 'worker role can inspect heartbeats for upsert');
 select ok(has_table_privilege('judge_worker', 'private.worker_heartbeats', 'UPDATE'), 'worker role can refresh its heartbeat');
