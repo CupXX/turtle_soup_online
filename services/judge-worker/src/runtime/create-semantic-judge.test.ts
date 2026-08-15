@@ -48,4 +48,37 @@ describe('createSemanticJudge', () => {
       schemaVersion: 'judge-schema-v1',
     });
   });
+
+  it('uses the OpenAI Responses runtime when the provider is openai-responses', () => {
+    const selected: string[] = [];
+    const runtime = createSemanticJudge({
+      ...config,
+      provider: 'openai-responses',
+      skillConfigs: {
+        'key-point-extraction': { model: 'extract-model', reasoningEffort: 'medium' as const },
+        'question-judge': { model: 'question-model', reasoningEffort: 'medium' as const },
+        'final-answer-judge': { model: 'final-model', reasoningEffort: 'medium' as const },
+      },
+    }, {
+      createOpenAIJudge: (skill, configured) => {
+        selected.push(`${skill}:${configured.model}:${configured.reasoningEffort}`);
+        return {
+          extractKeyPoints: async () => ({ key_points: [] }),
+          judgeQuestion: async () => ({ verdict: 'YES', fully_covered_key_point_ids: [] }),
+          judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+        };
+      },
+    });
+
+    expect(runtime.metadata['question-judge']).toMatchObject({
+      provider: 'openai-responses',
+      model: 'question-model',
+      reasoningEffort: 'medium',
+    });
+    expect(selected).toEqual([
+      'key-point-extraction:extract-model:medium',
+      'question-judge:question-model:medium',
+      'final-answer-judge:final-model:medium',
+    ]);
+  });
 });

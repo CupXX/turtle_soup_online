@@ -2,7 +2,7 @@ import type { HarnessSkill } from './runtime/semantic-judge.js';
 
 export type WorkerEnvironment = Record<string, string | undefined>;
 
-export type ReasoningEffort = 'off' | 'high' | 'max';
+export type ReasoningEffort = 'off' | 'none' | 'low' | 'medium' | 'high' | 'max';
 export type SkillJudgeConfig = { model: string; reasoningEffort: ReasoningEffort };
 
 export type WorkerConfig = {
@@ -29,10 +29,11 @@ function optional(env: WorkerEnvironment, name: string): string | undefined {
 
 function reasoningEffort(env: WorkerEnvironment, name: string): ReasoningEffort {
   const value = optional(env, name) ?? 'off';
-  if (value !== 'off' && value !== 'high' && value !== 'max') {
-    throw new Error(`${name} must be one of off, high, max`);
+  const allowed: readonly ReasoningEffort[] = ['off', 'none', 'low', 'medium', 'high', 'max'];
+  if (!allowed.includes(value as ReasoningEffort)) {
+    throw new Error(`${name} must be one of off, none, low, medium, high, max`);
   }
-  return value;
+  return value as ReasoningEffort;
 }
 
 export function loadWorkerConfig(env: WorkerEnvironment = process.env): WorkerConfig {
@@ -51,6 +52,7 @@ export function loadWorkerConfig(env: WorkerEnvironment = process.env): WorkerCo
     throw new Error('JUDGE_TIMEOUT_MS must be a positive integer');
   }
 
+  const provider = required(env, 'JUDGE_PROVIDER');
   const model = required(env, 'JUDGE_MODEL');
   const skillConfigs: Record<HarnessSkill, SkillJudgeConfig> = {
     'key-point-extraction': {
@@ -69,9 +71,11 @@ export function loadWorkerConfig(env: WorkerEnvironment = process.env): WorkerCo
 
   return {
     databaseUrl,
-    provider: required(env, 'JUDGE_PROVIDER'),
+    provider,
     apiBaseUrl,
-    apiKey: required(env, 'JUDGE_API_KEY'),
+    apiKey: provider === 'openai-responses'
+      ? (optional(env, 'OPENAI_API_KEY') ?? required(env, 'JUDGE_API_KEY'))
+      : required(env, 'JUDGE_API_KEY'),
     timeoutMs,
     workerId: required(env, 'WORKER_ID'),
     buildVersion: required(env, 'BUILD_VERSION'),

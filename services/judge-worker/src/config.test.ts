@@ -46,12 +46,28 @@ describe('worker configuration', () => {
     });
   });
 
+  it('accepts Luna medium as an independently configurable reasoning effort', () => {
+    const config = loadWorkerConfig({
+      ...validEnv,
+      JUDGE_PROVIDER: 'openai-responses',
+      JUDGE_MODEL: 'gpt-5.6-luna',
+      JUDGE_QUESTION_MODEL: 'gpt-5.6-luna',
+      JUDGE_QUESTION_REASONING_EFFORT: 'medium',
+      OPENAI_API_KEY: 'openai-key',
+    });
+    expect(config.skillConfigs['question-judge']).toEqual({
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'medium',
+    });
+    expect(config.apiKey).toBe('openai-key');
+  });
+
   it('rejects missing or non-positive timeout before startup', () => {
     const missing: Record<string, string | undefined> = { ...validEnv };
     delete missing.JUDGE_API_KEY;
     expect(() => loadWorkerConfig(missing)).toThrow(/JUDGE_API_KEY/);
 
     expect(() => loadWorkerConfig({ ...validEnv, JUDGE_TIMEOUT_MS: '0' })).toThrow(/JUDGE_TIMEOUT_MS/);
-    expect(() => loadWorkerConfig({ ...validEnv, JUDGE_QUESTION_REASONING_EFFORT: 'medium' })).toThrow(/JUDGE_QUESTION_REASONING_EFFORT/);
+    expect(() => loadWorkerConfig({ ...validEnv, JUDGE_QUESTION_REASONING_EFFORT: 'turbo' })).toThrow(/JUDGE_QUESTION_REASONING_EFFORT/);
   });
 });

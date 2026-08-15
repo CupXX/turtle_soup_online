@@ -4,6 +4,7 @@ import { QUESTION_JUDGE_PROMPT_VERSION } from '../skills/question-judge.js';
 import { FINAL_ANSWER_JUDGE_PROMPT_VERSION } from '../skills/final-answer-judge.js';
 import { HarnessSemanticJudge } from './harness-semantic-judge.js';
 import { createHarnessInvoker } from './create-harness-invoker.js';
+import { OpenAIResponsesSemanticJudge } from './openai-responses-semantic-judge.js';
 import type { HarnessSkill } from './semantic-judge.js';
 import type { SkillJudgeConfig, WorkerConfig } from '../config.js';
 
@@ -23,6 +24,7 @@ export type JudgeRuntime = {
 
 export type CreateSemanticJudgeDependencies = {
   createJudge?: (skill: HarnessSkill, selected: SkillJudgeConfig) => SemanticJudge;
+  createOpenAIJudge?: (skill: HarnessSkill, selected: SkillJudgeConfig) => SemanticJudge;
 };
 
 const PROMPT_VERSIONS: Record<HarnessSkill, string> = {
@@ -37,16 +39,27 @@ export function createSemanticJudge(
   config: WorkerConfig,
   dependencies: CreateSemanticJudgeDependencies = {},
 ): JudgeRuntime {
-  const createJudge = dependencies.createJudge ?? ((skill, selected) => new HarnessSemanticJudge(
-    createHarnessInvoker({
-      apiBaseUrl: config.apiBaseUrl,
-      apiKey: config.apiKey,
-      timeoutMs: config.timeoutMs,
-      model: selected.model,
-      reasoningEffort: selected.reasoningEffort,
-    }),
-    config.timeoutMs,
-  ));
+  const createJudge = dependencies.createJudge ?? ((skill, selected) => {
+    if (config.provider === 'openai-responses') {
+      return (dependencies.createOpenAIJudge ?? (() => new OpenAIResponsesSemanticJudge({
+        apiBaseUrl: config.apiBaseUrl,
+        apiKey: config.apiKey,
+        timeoutMs: config.timeoutMs,
+        model: selected.model,
+        reasoningEffort: selected.reasoningEffort,
+      })))(skill, selected);
+    }
+    return new HarnessSemanticJudge(
+      createHarnessInvoker({
+        apiBaseUrl: config.apiBaseUrl,
+        apiKey: config.apiKey,
+        timeoutMs: config.timeoutMs,
+        model: selected.model,
+        reasoningEffort: selected.reasoningEffort,
+      }),
+      config.timeoutMs,
+    );
+  });
 
   const judges = Object.fromEntries(SKILLS.map((skill) => [skill, createJudge(skill, config.skillConfigs[skill])])) as Record<HarnessSkill, SemanticJudge>;
   const metadata = Object.fromEntries(SKILLS.map((skill) => {
