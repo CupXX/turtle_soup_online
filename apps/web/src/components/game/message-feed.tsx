@@ -10,10 +10,10 @@ type MessageFeedProps = {
   onChallenge?: (message: GameMessage) => void;
 };
 
-function eventLabel(eventType: PublicGameEvent['eventType']): string {
-  if (eventType === 'FINAL_ANSWER_FAILED') return 'Final answer failed';
-  if (eventType === 'FINAL_ANSWER_SUCCEEDED') return 'Final answer succeeded';
-  return 'Game ended by admin';
+function eventLabel(eventType: PublicGameEvent['eventType'], nickname?: string): string {
+  if (eventType === 'FINAL_ANSWER_FAILED') return `${nickname ?? '匿名玩家'} 提交了正答：❌ 失败`;
+  if (eventType === 'FINAL_ANSWER_SUCCEEDED') return `${nickname ?? '匿名玩家'} 提交了正答：✅ 成功`;
+  return '管理员结束了本局';
 }
 
 export function MessageFeed({ messages, players, events = [], onChallenge }: MessageFeedProps) {
@@ -34,15 +34,14 @@ export function MessageFeed({ messages, players, events = [], onChallenge }: Mes
           ))}
         </div>
       ) : (
-        <div className="empty-state"><strong>还没有问题</strong><span>从故事表面开始，提出第一个可验证的问题。</span></div>
+        <div className="empty-state"><strong>还没有问题</strong><span>从汤面开始，提出第一个可验证的问题。</span></div>
       )}
       {events.length ? (
         <div className="message-event-list" aria-live="polite">
           {events.slice().sort((left, right) => left.sequenceNo - right.sequenceNo).map((event) => (
             <article className="message-event-row" key={event.id} data-event-type={event.eventType}>
               <span>#{event.sequenceNo}</span>
-              <strong>{event.playerId ? names.get(event.playerId) ?? 'Anonymous player' : 'System'}</strong>
-              <span>{eventLabel(event.eventType)}</span>
+              <span>{eventLabel(event.eventType, event.playerId ? names.get(event.playerId) : undefined)}</span>
               {event.awardedPoints > 0 ? <span>+{event.awardedPoints}</span> : null}
             </article>
           ))}

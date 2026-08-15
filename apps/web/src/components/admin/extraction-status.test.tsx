@@ -11,10 +11,10 @@ describe('ExtractionStatus', () => {
     const { rerender } = render(<ExtractionStatus status="FAILED" message="判定服务暂时不可用。" onRetry={onRetry} />);
 
     expect(screen.getByText('判定服务暂时不可用。')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: '重试线索提取' }));
+    await user.click(screen.getByRole('button', { name: '重试关键点提取' }));
     expect(onRetry).toHaveBeenCalled();
 
-    rerender(<ExtractionStatus status="READY" message="线索已准备好，可以激活游戏。" onRetry={onRetry} />);
-    expect(screen.queryByRole('button', { name: '重试线索提取' })).toBeNull();
+    rerender(<ExtractionStatus status="READY" message="关键点已准备好，可以激活游戏。" onRetry={onRetry} />);
+    expect(screen.queryByRole('button', { name: '重试关键点提取' })).toBeNull();
   });
 });

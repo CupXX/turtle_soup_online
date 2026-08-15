@@ -11,8 +11,10 @@ describe('FinalAnswerModal', () => {
     const onSubmit = vi.fn();
     render(<FinalAnswerModal open onClose={onClose} onSubmit={onSubmit} />);
 
-    await user.type(screen.getByLabelText('最终答案'), '他发现了真相。');
-    await user.click(screen.getByRole('button', { name: '提交最终答案' }));
+    expect(screen.getByLabelText('正答')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '提交正答' })).toBeTruthy();
+    await user.type(screen.getByLabelText('正答'), '他发现了真相。');
+    await user.click(screen.getByRole('button', { name: '提交正答' }));
     expect(onSubmit).toHaveBeenCalledWith('他发现了真相。');
 
     await user.keyboard('{Escape}');

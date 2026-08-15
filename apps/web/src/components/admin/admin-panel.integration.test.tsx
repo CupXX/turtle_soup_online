@@ -38,8 +38,8 @@ describe('AdminPanel', () => {
     await user.click(screen.getByRole('button', { name: '进入管理台' }));
 
     await waitFor(() => expect(screen.getByRole('heading', { name: '准备下一局' })).toBeTruthy());
-    await user.type(screen.getByLabelText('公开题面'), 'surface');
-    await user.type(screen.getByLabelText('完整答案（仅判定服务可见）'), 'solution');
+    await user.type(screen.getByLabelText('汤面'), 'surface');
+    await user.type(screen.getByLabelText('汤底（仅判定服务可见）'), 'solution');
     await user.click(screen.getByRole('button', { name: '创建等待中的游戏' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/games/current/preparation', expect.objectContaining({ method: 'PUT' })));

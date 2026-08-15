@@ -52,7 +52,7 @@ export const demoSnapshot: PublicGameSnapshot = {
       gameId: 'demo-game',
       playerId: 'demo-player-cups',
       sequenceNo: 2,
-      content: '伞下是不是藏着关键线索？',
+      content: '伞下是不是藏着关键点？',
       status: 'PENDING',
       verdict: null,
       awardedPoints: 0,

@@ -72,6 +72,14 @@ describe('GameClient', () => {
     expect(screen.queryByText('private final answer')).toBeNull();
   });
 
+  it('uses 汤面 and 正答 as the public labels', () => {
+    render(<GameClient initialSnapshot={activeSnapshot} currentPlayerId="p1" />);
+
+    expect(screen.getByRole('heading', { name: '汤面' })).toBeTruthy();
+    expect(screen.getByText(/关键点已发现/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: '提交正答' })).toBeTruthy();
+  });
+
   it('disables both inputs and shows the reveal after the game has ended', () => {
     const endedSnapshot = {
       ...activeSnapshot,

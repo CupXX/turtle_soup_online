@@ -10,11 +10,11 @@ describe('GamePreparationForm', () => {
     const onSubmit = vi.fn();
     render(<GamePreparationForm onSubmit={onSubmit} />);
 
-    await user.type(screen.getByLabelText('公开题面'), '有人在海边捡到了一把伞。');
+    await user.type(screen.getByLabelText('汤面'), '有人在海边捡到了一把伞。');
     await user.click(screen.getByRole('button', { name: '创建等待中的游戏' }));
     expect(onSubmit).not.toHaveBeenCalled();
 
-    await user.type(screen.getByLabelText('完整答案（仅判定服务可见）'), '答案不会显示给玩家。');
+    await user.type(screen.getByLabelText('汤底（仅判定服务可见）'), '答案不会显示给玩家。');
     await user.click(screen.getByRole('button', { name: '创建等待中的游戏' }));
     expect(onSubmit).toHaveBeenCalledWith({
       puzzleSurface: '有人在海边捡到了一把伞。',

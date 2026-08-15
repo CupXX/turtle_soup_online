@@ -193,7 +193,7 @@ export function GameClient({
         <section className="waiting-page" aria-labelledby="waiting-title">
           <p className="eyebrow">海龟汤 / 等待下一局</p>
           <h1 id="waiting-title">下一局故事还在准备中</h1>
-          <p className="muted">管理员发布题面后，这里会自动出现公共故事表面。</p>
+          <p className="muted">管理员发布汤面后，这里会自动出现公共汤面。</p>
           {requireNickname ? <NicknameGate onSubmit={handleNicknameSubmit} error={nicknameError} busy={nicknameBusy} /> : null}
         </section>
       </main>
@@ -212,16 +212,16 @@ export function GameClient({
             <GameRevealPanel reveal={snapshot.reveal} />
             {visiblePrivateFinalAnswer ? (
               <aside className="private-answer-note" aria-live="polite">
-                <strong>{visiblePrivateFinalAnswer.status === 'FAILED' ? '最终答案判定失败' : '最终答案已私下提交'}</strong>
+                <strong>{visiblePrivateFinalAnswer.status === 'FAILED' ? '正答判定失败' : '正答已私下提交'}</strong>
                 <span>{visiblePrivateFinalAnswer.status === 'FAILED' ? visiblePrivateFinalAnswer.answer : '只有你能在本页面看到这条状态。'}</span>
               </aside>
             ) : null}
             <MessageComposer disabled={snapshot.game.status !== 'ACTIVE'} error={messageError} onSubmit={handleMessageSubmit} />
             <div className="final-answer-action">
               <button className="secondary-button" type="button" onClick={() => setFinalAnswerOpen(true)} disabled={!enableFinalAnswer || snapshot.game.status !== 'ACTIVE'}>
-                提交最终答案
+                提交正答
               </button>
-              {!enableFinalAnswer ? <span className="muted">最终答案功能将在后续阶段开放。</span> : null}
+              {!enableFinalAnswer ? <span className="muted">正答功能将在后续阶段开放。</span> : null}
               {enableFinalAnswer && snapshot.game.status === 'ENDED' ? <span className="muted">本局已结束，输入已停用。</span> : null}
             </div>
           </div>

@@ -106,7 +106,7 @@ export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetry
         }
       }
       setStatus('RUNNING');
-      setNotice(demo ? '演示模式：题面字段已通过界面校验。' : '题面已提交，等待线索提取。');
+      setNotice(demo ? '演示模式：汤面字段已通过界面校验。' : '汤面已提交，等待关键点提取。');
     } catch {
       setError('准备请求失败，请稍后重试。');
     } finally {
@@ -122,7 +122,7 @@ export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetry
       } else if (!demo) {
         await retryExtractionRequest();
       }
-      setNotice('已请求重新提取线索。');
+      setNotice('已请求重新提取关键点。');
     } catch {
       setStatus('FAILED');
       setNotice('重试请求失败，请稍后再试。');

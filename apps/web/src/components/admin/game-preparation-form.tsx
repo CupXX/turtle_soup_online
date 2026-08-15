@@ -31,11 +31,11 @@ export function GamePreparationForm({ busy = false, error, onSubmit }: GamePrepa
         </div>
         <span className="status-pill">WAITING</span>
       </div>
-      <p className="muted">题面会在激活后公开；完整答案只交给服务端判定和线索提取流程。</p>
+      <p className="muted">汤面会在激活后公开；汤底只交给服务端判定和关键点提取流程。</p>
       <form className="stack-form" onSubmit={handleSubmit}>
-        <label htmlFor="puzzle-surface">公开题面</label>
+        <label htmlFor="puzzle-surface">汤面</label>
         <textarea id="puzzle-surface" value={puzzleSurface} onChange={(event) => setPuzzleSurface(event.target.value)} maxLength={4000} rows={5} required />
-        <label htmlFor="full-solution">完整答案（仅判定服务可见）</label>
+        <label htmlFor="full-solution">汤底（仅判定服务可见）</label>
         <textarea id="full-solution" value={fullSolution} onChange={(event) => setFullSolution(event.target.value)} maxLength={12000} rows={8} required />
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <button className="primary-button" type="submit" disabled={busy || !puzzleSurface.trim() || !fullSolution.trim()}>
