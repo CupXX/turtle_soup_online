@@ -64,6 +64,7 @@ The fixed question suite is:
 | 是不是点了蚊香？ | `YES` | `KP3` |
 | 是不是蚊子把他弄醒的？ | `YES` | `KP1` |
 | 他这一巴掌是在打蚊子，但是没打中吗？ | `YES` | `KP2` |
+| 他是被蚊子叮醒的，而且后来把蚊子打死了，对吗？ | `BOTH` | `KP1` |
 
 The expected verdict and coverage never change between model configurations.
 
@@ -94,10 +95,13 @@ The production prompt defines:
 Relationship questions answer the relationship directly. If an entity is
 related, the relationship question is normally `YES`; if not, it is `NO`.
 
-A key point is covered only when a `YES` answer confirms every material fact in
-that key point. Entity-only, action-only, target-only, or outcome-only matches
-remain partial. Questions phrased as yes/no questions may cover a key point when
-the affirmative answer confirms the complete fact.
+A key point is covered when one semantically correct proposition within the
+message confirms every material fact in that key point. Coverage is computed
+independently of the message's overall verdict, so a `BOTH` message may fully
+cover a key point through its true proposition while another proposition is
+false. Entity-only, action-only, target-only, or outcome-only matches remain
+partial. Questions phrased as yes/no questions may cover a key point when the
+affirmative answer confirms the complete fact.
 
 ## Key-point extraction policy
 
@@ -197,8 +201,12 @@ Player messages render as chat bubbles:
 - verdict, reaction, status, and points remain visually attached to the same
   player message.
 
-The AI never receives a nickname, public player identity, standalone message,
-or chat bubble. Public final-answer outcomes remain system events, not AI turns.
+The Question Judge receives only the puzzle surface, canonical solution, fixed
+key points, and current player message content required by its contract. It
+does not receive the player's nickname or identity, UI/chat-bubble metadata,
+conversation history, score, or discovered-key-point state. The current message
+is model input but never becomes a standalone AI-authored public message or chat
+bubble. Public final-answer outcomes remain system events, not AI turns.
 
 ## Scope boundaries
 
@@ -212,11 +220,12 @@ The phase is complete only when all of the following are verified:
 
 1. Extraction produces the three intended mosquito-puzzle semantics and no
    redundant surface-restatement point.
-2. The seven-question suite runs unchanged against all three configurations and
+2. The eight-question suite runs unchanged against all three configurations and
    produces a concise comparison report with separate verdict and coverage
    accuracy, schema validity, latency, and available usage/cost.
 3. Prompt unit tests cover verdict/coverage independence, partial coverage,
-   relationship questions, and strict `BOTH`/`IRRELEVANT` behavior.
+   relationship questions, `BOTH` with a fully covered true proposition, and
+   strict `BOTH`/`IRRELEVANT` behavior.
 4. Runtime tests prove independent per-skill model/reasoning selection with the
    current global fallback.
 5. Audit tests and database tests prove one safe metadata record per attempt,
