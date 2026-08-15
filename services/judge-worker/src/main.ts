@@ -1,8 +1,10 @@
 import type { JudgeErrorCode, SemanticJudge } from '@turtle-soup/contracts';
-import { loadWorkerConfig, type WorkerConfig, type WorkerEnvironment } from './config.js';
+import { loadWorkerConfig, type WorkerEnvironment } from './config.js';
+import { recordJudgeAttempt as recordJudgeAttemptRow, type JudgeAttemptRecord } from './db/judge-attempts.js';
 import { claimNextAction, claimNextExtraction, recordExtractionRetry, type ClaimedAction, type ClaimedExtraction } from './db/queue.js';
 import { writeHeartbeat } from './db/heartbeat.js';
 import { createSemanticJudge } from './runtime/create-semantic-judge.js';
+import { createAuditedSemanticJudge, type JudgeAttemptRecorder } from './runtime/audited-semantic-judge.js';
 import { SemanticJudgeRuntimeError } from './runtime/semantic-judge.js';
 import { JudgeValidationError } from './skills/validate-result.js';
 import { processClaimedAction } from './processors/action-processor.js';
@@ -17,6 +19,7 @@ export type StartWorkerDependencies = {
   claimAction?: () => Promise<ClaimedAction | null>;
   processExtraction?: (job: ClaimedExtraction) => Promise<void>;
   processAction?: (action: ClaimedAction) => Promise<void>;
+  recordJudgeAttempt?: JudgeAttemptRecorder;
 };
 
 type RetryCode = Exclude<JudgeErrorCode, 'LEASE_LOST'>;
@@ -28,16 +31,15 @@ function retryCode(error: unknown): RetryCode | 'LEASE_LOST' | null {
   return null;
 }
 
-function createJudge(config: WorkerConfig): SemanticJudge {
-  return createSemanticJudge(config).judge;
-}
-
 export async function startWorker(
   env: WorkerEnvironment = process.env,
   dependencies: StartWorkerDependencies = {},
 ): Promise<void> {
   const config = loadWorkerConfig(env);
-  const judge = dependencies.judge ?? createJudge(config);
+  const runtime = dependencies.judge ? undefined : createSemanticJudge(config);
+  const judge = dependencies.judge ?? runtime?.judge;
+  if (!judge) throw new Error('JUDGE_RUNTIME_NOT_INITIALIZED');
+  const recordAttempt = dependencies.recordJudgeAttempt ?? ((record: JudgeAttemptRecord) => recordJudgeAttemptRow(record));
   const controller = new AbortController();
   const onSignal = () => controller.abort();
   process.once('SIGTERM', onSignal);
@@ -50,18 +52,23 @@ export async function startWorker(
   const claimAction = dependencies.claimAction
     ?? (() => claimNextAction(config.workerId, new Date()));
   const processExtraction = dependencies.processExtraction ?? (async (job: ClaimedExtraction) => {
+    const jobJudge = runtime
+      ? createAuditedSemanticJudge(runtime, { extractionJobId: job.id, attemptNo: job.attempt }, recordAttempt)
+      : judge;
     try {
-      await processClaimedExtraction(job, { judge, workerId: config.workerId });
+      await processClaimedExtraction(job, { judge: jobJudge, workerId: config.workerId });
     } catch (error) {
       const code = retryCode(error);
       if (!code || code === 'LEASE_LOST') throw error;
       await recordExtractionRetry(job.id, job.attempt, code);
     }
   });
-  const processAction = dependencies.processAction ?? ((action: ClaimedAction) => processClaimedAction(action, {
-    judge,
-    workerId: config.workerId,
-  }));
+  const processAction = dependencies.processAction ?? ((action: ClaimedAction) => {
+    const actionJudge = runtime
+      ? createAuditedSemanticJudge(runtime, { actionId: action.id, attemptNo: action.attempt }, recordAttempt)
+      : judge;
+    return processClaimedAction(action, { judge: actionJudge, workerId: config.workerId });
+  });
 
   try {
     const runner = dependencies.runWorker ?? runWorker;

@@ -1,6 +1,6 @@
 begin;
 
-select plan(37);
+select plan(39);
 
 select has_schema('api', 'public API schema');
 select has_schema('private', 'private persistence schema');
@@ -31,6 +31,26 @@ select has_table('private', 'key_point_extraction_jobs'::name);
 select has_table('private', 'game_actions'::name);
 select has_table('private', 'final_answer_submissions'::name);
 select has_table('private', 'judge_attempts'::name);
+select ok(
+  exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'private'
+      and table_name = 'judge_attempts'
+      and column_name = 'reasoning_effort'
+  ),
+  'judge attempts record reasoning effort'
+);
+select ok(
+  exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'private'
+      and table_name = 'judge_attempts'
+      and column_name = 'skill_type'
+  ),
+  'judge attempts record skill type'
+);
 select has_table('private', 'admin_audit_events'::name);
 select has_table('private', 'request_idempotency'::name);
 select has_table('private', 'rate_limit_buckets'::name);

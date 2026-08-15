@@ -1,6 +1,6 @@
 begin;
 
-select plan(52);
+select plan(54);
 
 select ok(has_schema_privilege('anon', 'api', 'USAGE'), 'anon can use the exposed api schema');
 select ok(not has_schema_privilege('anon', 'private', 'USAGE'), 'anon cannot use the private schema');
@@ -47,6 +47,8 @@ select ok(has_table_privilege('game_web', 'api.game_reveals', 'INSERT'), 'web ro
 select ok(has_table_privilege('game_web', 'api.revealed_key_points', 'INSERT'), 'web role can publish force-end key points');
 select ok(has_table_privilege('game_web', 'private.request_idempotency', 'UPDATE'), 'web role can bind request idempotency results');
 select ok(not has_table_privilege('game_web', 'private.judge_attempts', 'SELECT'), 'web role cannot read judge attempts');
+select ok(has_table_privilege('judge_worker', 'private.judge_attempts', 'INSERT'), 'worker can insert judge attempt metadata');
+select ok(not has_table_privilege('judge_worker', 'private.judge_attempts', 'SELECT'), 'worker cannot read historical judge attempts');
 select ok(not has_table_privilege('game_web', 'private.key_point_claims', 'INSERT'), 'web role cannot award key-point claims');
 select ok(has_table_privilege('judge_worker', 'private.game_secrets', 'SELECT'), 'worker role can read the current secret input');
 select ok(has_table_privilege('judge_worker', 'private.key_points', 'INSERT'), 'worker role can publish extracted key points');
