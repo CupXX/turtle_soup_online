@@ -6,6 +6,8 @@
     "benchmark": "tsx benchmarks/run.ts",
     "benchmark:mosquito": "tsx benchmarks/mosquito-comparison.ts",
     "benchmark:mosquito:25": "tsx benchmarks/mosquito-question-judge-live.ts",
+    "benchmark:all-choices:30": "tsx benchmarks/all-choices-correct-question-judge-live.ts",
+    "benchmark:key-points:v3": "tsx benchmarks/key-point-extraction-v3-live.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json"

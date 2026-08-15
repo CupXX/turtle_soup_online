@@ -1,0 +1,344 @@
+{
+  "dataset": "all_choices_correct_question_judge_regression_v1",
+  "puzzle_surface": "有一道选择题，不论选什么都是对的",
+  "full_solution": "凶手将尸块藏在了不同的房间里，对被害人的妈妈说，猜猜你的孩子在哪间屋子。母亲不论做出任何选择，凶手都说，回答正确。母亲因此得知自己的孩子已经被彻底杀害，残忍分尸。",
+  "key_points": [
+    {
+      "id": "KP1",
+      "content": "所谓的“选择题”实际是凶手让被害人的母亲猜她的孩子在哪个房间。"
+    },
+    {
+      "id": "KP2",
+      "content": "被害人的尸体已经被分尸。"
+    },
+    {
+      "id": "KP3",
+      "content": "尸块被分散藏在多个不同房间，因此母亲无论选择哪个房间，都能被凶手说成答对。"
+    }
+  ],
+  "cases": [
+    {
+      "id": "school_exam",
+      "question": "这是学校考试里的选择题吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "surface_interpretation",
+        "implicit_competing_explanation"
+      ]
+    },
+    {
+      "id": "on_test_paper",
+      "question": "这道题是在试卷上的吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "surface_interpretation",
+        "implicit_competing_explanation"
+      ]
+    },
+    {
+      "id": "tv_quiz",
+      "question": "这是电视问答或者知识竞赛里的题吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "surface_interpretation",
+        "wrong_scenario"
+      ]
+    },
+    {
+      "id": "unique_standard_answer",
+      "question": "这道题其实有且只有一个标准正确答案吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevant_false_hypothesis",
+        "mechanism_boundary"
+      ]
+    },
+    {
+      "id": "identical_options",
+      "question": "是不是因为所有选项的内容其实都一样？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "wrong_mechanism",
+        "implicit_competing_explanation"
+      ]
+    },
+    {
+      "id": "arbitrary_grading",
+      "question": "是不管事实是什么，出题人都会随便说答对吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "wrong_mechanism",
+        "relevant_false_hypothesis"
+      ]
+    },
+    {
+      "id": "school_related",
+      "question": "这件事跟学校有关吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevance_question_override"
+      ]
+    },
+    {
+      "id": "options_are_locations",
+      "question": "这些选项代表的是不同地点吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "semantic_abstraction",
+        "partial_fact_no_kp"
+      ]
+    },
+    {
+      "id": "asks_location",
+      "question": "这道题是在问某个人或某个东西在哪里吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "semantic_abstraction",
+        "partial_fact_no_kp"
+      ]
+    },
+    {
+      "id": "room_related",
+      "question": "这道题跟房间有关吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevance_question_override",
+        "partial_fact_no_kp"
+      ]
+    },
+    {
+      "id": "multiple_options_true",
+      "question": "这些选项可以同时都是正确的吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "semantic_entailment",
+        "surface_mechanism_result"
+      ]
+    },
+    {
+      "id": "four_options",
+      "question": "这道题一共有四个选项吗？",
+      "expectedVerdict": "IRRELEVANT",
+      "expectedCoverage": [],
+      "policyTags": [
+        "unknown_unimportant_detail"
+      ]
+    },
+    {
+      "id": "object_matches_multiple_options",
+      "question": "是因为题目里被问到的对象同时和多个选项都有关系吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "semantic_abstraction",
+        "partial_mechanism_no_kp"
+      ]
+    },
+    {
+      "id": "choice_changes_reality",
+      "question": "答题人的选择会改变事实本身吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevant_false_hypothesis",
+        "wrong_mechanism"
+      ]
+    },
+    {
+      "id": "answerer_adult",
+      "question": "答题的人是成年人吗？",
+      "expectedVerdict": "IRRELEVANT",
+      "expectedCoverage": [],
+      "policyTags": [
+        "unknown_unimportant_attribute"
+      ]
+    },
+    {
+      "id": "death_related",
+      "question": "这件事跟有人死亡有关吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevance_question_override",
+        "partial_fact_no_kp"
+      ]
+    },
+    {
+      "id": "corpse_related",
+      "question": "这件事跟尸体有关吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevance_question_override",
+        "partial_fact_no_kp"
+      ]
+    },
+    {
+      "id": "dismemberment_related",
+      "question": "这件事跟分尸有关吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevance_question_override",
+        "partial_fact_no_kp"
+      ]
+    },
+    {
+      "id": "someone_dismembered",
+      "question": "有人被分尸了吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [
+        "KP2"
+      ],
+      "policyTags": [
+        "key_point_coverage",
+        "hidden_fact"
+      ]
+    },
+    {
+      "id": "body_parts_different_places",
+      "question": "尸体的不同部分在不同地方吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [
+        "KP2"
+      ],
+      "policyTags": [
+        "key_point_coverage",
+        "partial_mechanism"
+      ]
+    },
+    {
+      "id": "culprit_glasses",
+      "question": "出题的人戴眼镜吗？",
+      "expectedVerdict": "IRRELEVANT",
+      "expectedCoverage": [],
+      "policyTags": [
+        "unknown_unimportant_attribute"
+      ]
+    },
+    {
+      "id": "body_parts_different_rooms",
+      "question": "尸块被分别放在不同房间里吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [
+        "KP2"
+      ],
+      "policyTags": [
+        "key_point_coverage",
+        "mechanism_component_no_bridge"
+      ]
+    },
+    {
+      "id": "distributed_rooms_explain_all_correct",
+      "question": "是因为尸块分散在不同房间，所以不管选哪个房间都能算答对吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [
+        "KP2",
+        "KP3"
+      ],
+      "policyTags": [
+        "multi_key_point_coverage",
+        "causal_mechanism"
+      ]
+    },
+    {
+      "id": "questioner_is_murderer",
+      "question": "这个选择题是凶手提出来的吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [],
+      "policyTags": [
+        "partial_fact_no_kp",
+        "scene_reconstruction"
+      ]
+    },
+    {
+      "id": "mother_guesses_child_room",
+      "question": "是凶手让被害人的妈妈猜她的孩子在哪个房间吗？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [
+        "KP1"
+      ],
+      "policyTags": [
+        "key_point_coverage",
+        "scene_reconstruction"
+      ]
+    },
+    {
+      "id": "full_solution_chain",
+      "question": "是不是凶手把被害人分尸，把尸块藏在不同房间，再让被害人的妈妈猜孩子在哪个房间，所以她选哪个房间都被说成答对？",
+      "expectedVerdict": "YES",
+      "expectedCoverage": [
+        "KP1",
+        "KP2",
+        "KP3"
+      ],
+      "policyTags": [
+        "full_fact_chain",
+        "multi_key_point_coverage"
+      ]
+    },
+    {
+      "id": "answerer_job_related",
+      "question": "答题人的职业跟为什么所有选项都正确有关吗？",
+      "expectedVerdict": "NO",
+      "expectedCoverage": [],
+      "policyTags": [
+        "relevance_question_override"
+      ]
+    },
+    {
+      "id": "questioner_gender",
+      "question": "出题的人是男性吗？",
+      "expectedVerdict": "IRRELEVANT",
+      "expectedCoverage": [],
+      "policyTags": [
+        "unknown_unimportant_attribute"
+      ]
+    },
+    {
+      "id": "happened_at_night",
+      "question": "这件事发生在晚上吗？",
+      "expectedVerdict": "IRRELEVANT",
+      "expectedCoverage": [],
+      "policyTags": [
+        "unknown_unimportant_background"
+      ]
+    },
+    {
+      "id": "is_really_choice_question",
+      "question": "这真的是一道“选择题”吗？",
+      "expectedVerdict": "BOTH",
+      "expectedCoverage": [],
+      "policyTags": [
+        "material_ambiguity",
+        "ordinary_meaning_vs_exam_term"
+      ]
+    }
+  ],
+  "summary": {
+    "caseCount": 30,
+    "verdictDistribution": {
+      "NO": 9,
+      "YES": 15,
+      "IRRELEVANT": 5,
+      "BOTH": 1
+    },
+    "coverageHitCounts": {
+      "KP2": 5,
+      "KP3": 2,
+      "KP1": 2
+    },
+    "designNote": "BOTH is intentionally rare. Prefer a definite YES/NO/IRRELEVANT whenever the player's wording has a clear ordinary interpretation; use BOTH only for genuine material ambiguity."
+  }
+}

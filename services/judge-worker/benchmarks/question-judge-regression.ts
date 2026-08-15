@@ -120,6 +120,7 @@ export type FailureCategory =
   | 'BOTH_MIXED_PROPOSITION_FAILURE'
   | 'BOTH_AMBIGUITY_FAILURE'
   | 'BOTH_OVER_TRIGGER'
+  | 'SURFACE_INTERPRETATION_FAILURE'
   | 'KP_OVER_TRIGGER'
   | 'KP_UNDER_TRIGGER'
   | 'KP_WRONG_ID'
@@ -175,7 +176,9 @@ export function classifyFailure(
       if (expected.policyTags.includes('mixed_true_false')) categories.push('BOTH_MIXED_PROPOSITION_FAILURE');
       if (expected.policyTags.includes('material_ambiguity')) categories.push('BOTH_AMBIGUITY_FAILURE');
       if (!categories.length) categories.push('SEMANTIC_ENTAILMENT_FAILURE');
-    } else if (expected.expectedVerdict === 'IRRELEVANT' && expected.policyTags.includes('relevance_question_override')) {
+    } else if (expected.policyTags.includes('surface_interpretation')) {
+      categories.push('SURFACE_INTERPRETATION_FAILURE');
+    } else if (expected.policyTags.includes('relevance_question_override')) {
       categories.push('RELEVANCE_QUESTION_FAILURE');
     } else if (expected.expectedVerdict === 'IRRELEVANT') {
       categories.push('UNKNOWN_VS_FALSE_FAILURE');
@@ -232,6 +235,7 @@ const FAILURE_CATEGORIES: FailureCategory[] = [
   'BOTH_MIXED_PROPOSITION_FAILURE',
   'BOTH_AMBIGUITY_FAILURE',
   'BOTH_OVER_TRIGGER',
+  'SURFACE_INTERPRETATION_FAILURE',
   'KP_OVER_TRIGGER',
   'KP_UNDER_TRIGGER',
   'KP_WRONG_ID',
