@@ -8,6 +8,7 @@ import {
   fetchCurrentGame,
   joinCurrentGame,
   postFinalAnswer,
+  postChallenge,
   postQuestion,
   replacePreparation,
   retryExtraction,
@@ -72,6 +73,17 @@ describe('game API client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/game/current/final-answers', expect.objectContaining({ method: 'POST', credentials: 'same-origin' }));
     expect(new Headers(requestInit().headers).get('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/);
     expect(JSON.parse(String(requestInit().body))).toEqual({ answer: 'private answer' });
+  });
+
+  it('posts a challenge for a judged message with a generated receipt key', async () => {
+    const receipt = { challengeId: 'challenge-1', messageId: 'message-1', status: 'PENDING' as const };
+    vi.stubGlobal('fetch', fetchMock.mockResolvedValue(response(receipt)));
+
+    await expect(postChallenge('message-1')).resolves.toEqual(receipt);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/game/current/messages/challenge', expect.objectContaining({ method: 'POST', credentials: 'same-origin' }));
+    expect(new Headers(requestInit().headers).get('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/);
+    expect(JSON.parse(String(requestInit().body))).toEqual({ messageId: 'message-1' });
   });
 
   it('reads snapshots and routes admin lifecycle operations through existing handlers', async () => {

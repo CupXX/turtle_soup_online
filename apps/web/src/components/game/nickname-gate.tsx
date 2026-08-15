@@ -23,7 +23,7 @@ export function NicknameGate({ onSubmit, error, busy = false }: NicknameGateProp
     <section className="gate-card" aria-labelledby="nickname-title">
       <p className="eyebrow">多人推理现场</p>
       <h1 id="nickname-title">先留下你的昵称</h1>
-      <p className="muted">昵称会显示在公共问题流和本局统计中。</p>
+      <p className="muted">昵称会显示在对话流和本局统计中。</p>
       <form className="stack-form" onSubmit={handleSubmit}>
         <label htmlFor="nickname">昵称</label>
         <input

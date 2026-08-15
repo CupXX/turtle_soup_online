@@ -9,6 +9,8 @@ export type PublicGameEventType =
 
 export type MessageStatus = 'PENDING' | 'JUDGED' | 'ERROR' | 'CANCELLED';
 
+export type ChallengeStatus = 'NONE' | 'PENDING' | 'RESOLVED' | 'FAILED';
+
 export type JudgeVerdict = 'YES' | 'NO' | 'BOTH' | 'IRRELEVANT';
 
 export type Timestamp = string;
@@ -42,6 +44,8 @@ export type PublicMessage = {
   sequenceNo: number;
   content: string;
   status: MessageStatus;
+  /** Present on current API snapshots; optional for backwards-compatible demo/test fixtures. */
+  challengeStatus?: ChallengeStatus;
   verdict: JudgeVerdict | null;
   awardedPoints: number;
   createdAt: Timestamp;

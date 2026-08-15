@@ -116,6 +116,9 @@ importers:
       '@turtle-soup/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@turtle-soup/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       ajv:
         specifier: 8.20.0
         version: 8.20.0

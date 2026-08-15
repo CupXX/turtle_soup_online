@@ -25,13 +25,14 @@ export function PlayerStatsPanel({ stats }: PlayerStatsPanelProps) {
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th scope="col">玩家</th><th scope="col">分数</th><th scope="col">命中率</th></tr>
+            <tr><th scope="col">玩家</th><th scope="col">分数</th><th scope="col">本局提问数</th><th scope="col">命中率</th></tr>
           </thead>
           <tbody>
             {sortedStats(stats).map((player) => (
               <tr key={player.playerId}>
                 <th scope="row">{player.displayNickname}</th>
                 <td>{player.lifetimeScore}</td>
+                <td>{player.questionCount}</td>
                 <td>{player.hitRate === null ? '—' : `${Math.round(player.hitRate * 100)}%`}</td>
               </tr>
             ))}

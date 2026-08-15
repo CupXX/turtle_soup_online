@@ -67,7 +67,14 @@ export async function startWorker(
     const actionJudge = runtime
       ? createAuditedSemanticJudge(runtime, { actionId: action.id, attemptNo: action.attempt }, recordAttempt)
       : judge;
-    return processClaimedAction(action, { judge: actionJudge, workerId: config.workerId });
+    return processClaimedAction(action, {
+      judge: actionJudge,
+      workerId: config.workerId,
+      challengeJudgeFactory: runtime && action.actionType === 'CHALLENGE'
+        ? (attemptNo) => createAuditedSemanticJudge(runtime, { actionId: action.id, attemptNo }, recordAttempt)
+        : undefined,
+      challengeJudgeMetadata: runtime?.metadata['question-judge'],
+    });
   });
 
   try {

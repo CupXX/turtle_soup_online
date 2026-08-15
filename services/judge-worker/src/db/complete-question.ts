@@ -1,5 +1,8 @@
 import type { JudgeVerdict } from '@turtle-soup/contracts';
 import { withWorkerTransaction, type WorkerTransaction } from './client.js';
+import { QUESTION_JUDGE_PROMPT_VERSION } from '../skills/question-judge.js';
+
+const QUESTION_JUDGE_SCHEMA_VERSION = 'judge-schema-v1';
 
 export type CompleteQuestionInput = {
   actionId: string;
@@ -108,6 +111,38 @@ export async function completeQuestion(
       `;
       if (!keyPoints[0]) throw new Error('UNKNOWN_KEY_POINT_ID');
     }
+
+    await sql`
+      insert into private.question_judgments
+        (
+          message_id,
+          game_id,
+          player_id,
+          original_verdict,
+          original_covered_key_point_ids,
+          current_verdict,
+          current_covered_key_point_ids,
+          prompt_version,
+          schema_version,
+          completed_at,
+          updated_at
+        )
+      values
+        (
+          ${message.id},
+          ${action.gameId},
+          ${action.playerId},
+          ${input.verdict},
+          ${ids},
+          ${input.verdict},
+          ${ids},
+          ${QUESTION_JUDGE_PROMPT_VERSION},
+          ${QUESTION_JUDGE_SCHEMA_VERSION},
+          now(),
+          now()
+        )
+      on conflict (message_id) do nothing
+    `;
 
     let newlyClaimed = 0;
     for (const keyPointId of ids) {

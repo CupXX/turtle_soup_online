@@ -130,8 +130,9 @@ describe('durable queue', () => {
 
     await expect(recordActionRetry(actionId, 4, 'SCHEMA_INVALID', { transaction: fake.transaction })).resolves.toBeUndefined();
 
-    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls).toHaveLength(3);
     expect(fake.calls[0].toLowerCase()).toContain("status = 'blocked'");
     expect(fake.calls[0].toLowerCase()).toContain('private.game_actions');
+    expect(fake.calls.join('\n').toLowerCase()).toContain("challenge_status = 'failed'");
   });
 });

@@ -222,6 +222,15 @@ a {
   letter-spacing: -.025em;
 }
 
+.verdict-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
 .puzzle-copy {
   max-width: 62ch;
   margin: 20px 0 18px;

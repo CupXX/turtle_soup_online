@@ -4,6 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { MessageFeed } from './message-feed';
 
 describe('MessageFeed public events', () => {
+  it('shows the verdict legend without the old public-feed headings', () => {
+    render(<MessageFeed messages={[]} players={[]} />);
+
+    expect(screen.getByText('✅ 是')).toBeTruthy();
+    expect(screen.getByText('❌ 不是')).toBeTruthy();
+    expect(screen.getByText('❓ 是也不是')).toBeTruthy();
+    expect(screen.getByText('👎 与此无关')).toBeTruthy();
+    expect(screen.queryByText('公共问题流')).toBeNull();
+    expect(screen.queryByText('大家正在问什么')).toBeNull();
+    expect(screen.queryByText('按服务器顺序')).toBeNull();
+  });
+
   it('renders safe final-answer events without any private answer field', () => {
     render(<MessageFeed
       messages={[]}

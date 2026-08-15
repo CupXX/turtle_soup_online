@@ -50,6 +50,7 @@ type PublicMessageRow = {
   sequenceNo: number | string;
   content: string;
   status: PublicMessage['status'];
+  challengeStatus: NonNullable<PublicMessage['challengeStatus']> | null;
   verdict: PublicMessage['verdict'];
   awardedPoints: number;
   createdAt: string;
@@ -90,6 +91,7 @@ function publicMessage(row: PublicMessageRow): PublicMessage {
     sequenceNo: Number(row.sequenceNo),
     content: row.content,
     status: row.status,
+    challengeStatus: row.challengeStatus ?? 'NONE',
     verdict: row.verdict,
     awardedPoints: Number(row.awardedPoints),
     createdAt: row.createdAt,
@@ -107,6 +109,7 @@ function selectPublicMessage(sql: TransactionSql | Sql, messageId: string) {
       sequence_no as "sequenceNo",
       content,
       status,
+      challenge_status as "challengeStatus",
       verdict,
       awarded_points as "awardedPoints",
       created_at as "createdAt",
@@ -226,6 +229,7 @@ export async function submitMessage(
       sequenceNo,
       content,
       status: 'PENDING',
+      challengeStatus: 'NONE',
       verdict: null,
       awardedPoints: 0,
       createdAt: timestamp,

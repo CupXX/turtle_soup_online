@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, KeyboardEvent, useState } from 'react';
 
 type MessageComposerProps = {
   disabled?: boolean;
@@ -21,6 +21,12 @@ export function MessageComposer({ disabled = false, submitting = false, error, o
     }
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || !event.ctrlKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  }
+
   return (
     <form className="composer" onSubmit={handleSubmit}>
       <label htmlFor="question-input">提出问题</label>
@@ -29,6 +35,7 @@ export function MessageComposer({ disabled = false, submitting = false, error, o
           id="question-input"
           value={content}
           onChange={(event) => setContent(event.target.value)}
+          onKeyDown={handleKeyDown}
           maxLength={500}
           rows={2}
           placeholder="用一个问题推进推理…"
@@ -40,6 +47,7 @@ export function MessageComposer({ disabled = false, submitting = false, error, o
       </div>
       <div className="composer-footer">
         <span className="muted">{content.length}/500</span>
+        <span className="muted">Ctrl+Enter 发送</span>
         {error ? <span className="form-error" role="alert">{error}</span> : null}
       </div>
     </form>

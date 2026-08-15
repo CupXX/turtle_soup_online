@@ -39,4 +39,13 @@ describe('MessageRow', () => {
     const otherView = render(<MessageRow message={{ ...message, playerId: 'player-2' }} nickname="Other" />);
     expect(otherView.getByRole('article').getAttribute('data-owner')).toBe('other');
   });
+
+  it('keeps the original reaction visible while a challenge is pending and disables repeat challenges', () => {
+    const view = render(<MessageRow message={{ ...message, challengeStatus: 'PENDING' }} nickname="Cups" />);
+
+    expect(view.getByText('✅')).toBeTruthy();
+    expect(view.getByText('质疑中')).toBeTruthy();
+    expect(view.getByRole('button', { name: '质疑 Cups 的问题' })).toHaveProperty('disabled', true);
+    expect(view.getByRole('article').getAttribute('data-challenge-status')).toBe('PENDING');
+  });
 });

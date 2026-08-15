@@ -20,13 +20,12 @@ function eventLabel(eventType: PublicGameEvent['eventType'], nickname?: string):
 export function MessageFeed({ messages, players, currentPlayerId, events = [], onChallenge }: MessageFeedProps) {
   const names = new Map(players.map((player) => [player.id, player.displayNickname]));
   return (
-    <section className="feed-panel" aria-labelledby="feed-title">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">公共问题流</p>
-          <h2 id="feed-title">大家正在问什么</h2>
-        </div>
-        <span className="muted">按服务器顺序</span>
+    <section className="feed-panel" aria-label="对话流">
+      <div className="verdict-legend" aria-label="判定图例">
+        <span>✅ 是</span>
+        <span>❌ 不是</span>
+        <span>❓ 是也不是</span>
+        <span>👎 与此无关</span>
       </div>
       {messages.length ? (
         <div className="message-list">

@@ -3,6 +3,7 @@ import { JudgeValidationError } from '../skills/validate-result.js';
 import { SemanticJudgeRuntimeError } from '../runtime/semantic-judge.js';
 import type { ClaimedAction } from '../db/queue.js';
 import { processClaimedAction } from './action-processor.js';
+import type { ClaimedChallengeAction } from './challenge-processor.js';
 
 const action: ClaimedAction = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -15,7 +16,7 @@ const action: ClaimedAction = {
   leaseExpiresAt: '2099-01-01T00:00:00.000Z',
 };
 
-function dependencies(processQuestion: () => Promise<void>, processFinalAnswer: () => Promise<void> = async () => undefined) {
+function dependencies(processQuestion: () => Promise<void>, processFinalAnswer: () => Promise<void> = async () => undefined, processChallenge: () => Promise<void> = async () => undefined) {
   const retries: Array<{ code: string; id: string; attempt: number }> = [];
   const blocks: Array<{ code: string; id: string }> = [];
   return {
@@ -27,6 +28,7 @@ function dependencies(processQuestion: () => Promise<void>, processFinalAnswer: 
       now: new Date('2026-08-15T00:00:00.000Z'),
       processQuestion,
       processFinalAnswer,
+      processChallenge: async () => processChallenge(),
       recordRetry: async (id: string, attempt: number, code: string) => { retries.push({ id, attempt, code }); },
       markBlocked: async (id: string, code: string) => { blocks.push({ id, code }); },
     },
@@ -93,6 +95,15 @@ describe('processClaimedAction', () => {
     const fake = dependencies(async () => undefined, async () => { processed += 1; });
 
     await processClaimedAction({ ...action, actionType: 'FINAL_ANSWER' }, fake.value);
+
+    expect(processed).toBe(1);
+  });
+
+  it('dispatches CHALLENGE to the independent-vote processor', async () => {
+    let processed = 0;
+    const fake = dependencies(async () => undefined, async () => undefined, async () => { processed += 1; });
+
+    await processClaimedAction({ ...action, actionType: 'CHALLENGE' } as ClaimedChallengeAction, fake.value);
 
     expect(processed).toBe(1);
   });

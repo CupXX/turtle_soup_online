@@ -1,6 +1,6 @@
 begin;
 
-select plan(54);
+select plan(56);
 
 select ok(has_schema_privilege('anon', 'api', 'USAGE'), 'anon can use the exposed api schema');
 select ok(not has_schema_privilege('anon', 'private', 'USAGE'), 'anon cannot use the private schema');
@@ -37,6 +37,8 @@ select ok(has_table_privilege('game_web', 'api.players', 'INSERT'), 'web role ca
 select ok(has_table_privilege('game_web', 'api.games', 'UPDATE'), 'web role can update game counters and preparation');
 select ok(has_table_privilege('game_web', 'api.messages', 'INSERT'), 'web role can accept public questions');
 select ok(not has_table_privilege('game_web', 'api.messages', 'UPDATE'), 'web role cannot publish message verdicts');
+select ok(has_column_privilege('game_web', 'api.messages', 'challenge_status', 'UPDATE'), 'web role can update only challenge status');
+select ok(has_column_privilege('game_web', 'api.messages', 'updated_at', 'UPDATE'), 'web role can update challenge timestamps');
 select ok(has_table_privilege('game_web', 'private.game_actions', 'SELECT'), 'web role can inspect action idempotency');
 select ok(has_table_privilege('game_web', 'private.game_actions', 'INSERT'), 'web role can enqueue normal actions');
 select ok(has_table_privilege('game_web', 'private.game_actions', 'UPDATE'), 'web role can cancel or retry actions through the admin boundary');

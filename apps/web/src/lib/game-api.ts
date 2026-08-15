@@ -1,4 +1,4 @@
-import type { PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
+import type { ChallengeReceipt, PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
 
 export type FinalAnswerReceipt = {
   submissionId: string;
@@ -96,6 +96,10 @@ export function joinCurrentGame(): Promise<{ gameId: string }> {
 
 export function postQuestion(content: string): Promise<PublicMessage> {
   return postJson('/api/game/current/messages', { content });
+}
+
+export function postChallenge(messageId: string): Promise<ChallengeReceipt> {
+  return postJson('/api/game/current/messages/challenge', { messageId });
 }
 
 export function postFinalAnswer(answer: string): Promise<FinalAnswerReceipt> {

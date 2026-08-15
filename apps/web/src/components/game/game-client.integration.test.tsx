@@ -72,11 +72,21 @@ describe('GameClient', () => {
     expect(screen.queryByText('private final answer')).toBeNull();
   });
 
-  it('uses 汤面 and 正答 as the public labels', () => {
+  it('uses 当前汤面, verdict legend, and 正答 as the public labels', () => {
     render(<GameClient initialSnapshot={activeSnapshot} currentPlayerId="p1" />);
 
-    expect(screen.getByRole('heading', { name: '汤面' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '当前汤面' })).toBeTruthy();
+    expect(screen.getByText('✅ 是')).toBeTruthy();
+    expect(screen.getByText('❌ 不是')).toBeTruthy();
+    expect(screen.getByText('❓ 是也不是')).toBeTruthy();
+    expect(screen.getByText('👎 与此无关')).toBeTruthy();
+    expect(screen.queryByText('共享汤面')).toBeNull();
+    expect(screen.queryByText('大家正在问什么')).toBeNull();
+    expect(screen.queryByText('按服务器顺序')).toBeNull();
     expect(screen.getByText(/关键点已发现/)).toBeTruthy();
+    expect(screen.getByText('当前进度')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: '管理入口' })).toBeNull();
+    expect(screen.getByText('在线多人AI海龟汤游戏')).toBeTruthy();
     expect(screen.getByRole('button', { name: '提交正答' })).toBeTruthy();
   });
 
@@ -106,6 +116,27 @@ describe('GameClient', () => {
     expect(screen.getByText('判定中')).toBeTruthy();
   });
 
+  it('submits a challenge without creating an AI message and keeps the original reaction attached', async () => {
+    const user = userEvent.setup();
+    const onChallengeSubmit = vi.fn().mockResolvedValue({ challengeId: 'challenge-1', messageId: 'message-1', status: 'PENDING' });
+    const snapshot = {
+      ...activeSnapshot,
+      messages: [{
+        id: 'message-1', gameId: 'game-1', playerId: 'p1', sequenceNo: 1, content: '是不是有蚊子？',
+        status: 'JUDGED', verdict: 'YES', awardedPoints: 1, challengeStatus: 'NONE', createdAt: '', judgedAt: '', updatedAt: '',
+      }],
+    } as PublicGameSnapshot;
+
+    render(<GameClient initialSnapshot={snapshot} currentPlayerId="p1" onChallengeSubmit={onChallengeSubmit} />);
+    await user.click(screen.getByRole('button', { name: '质疑 Cups 的问题' }));
+
+    await waitFor(() => expect(onChallengeSubmit).toHaveBeenCalledWith(expect.objectContaining({ id: 'message-1' })));
+    const messageArticle = screen.getByText('是不是有蚊子？').closest('article');
+    expect(messageArticle?.getAttribute('data-challenge-status')).toBe('PENDING');
+    expect(screen.getByText('✅')).toBeTruthy();
+    expect(screen.queryByText(/^AI[:：]/i)).toBeNull();
+  });
+
   it('disables both inputs and shows the reveal after the game has ended', () => {
     const endedSnapshot = {
       ...activeSnapshot,
@@ -133,7 +164,7 @@ describe('GameClient', () => {
     await user.click(screen.getAllByRole('button')[0]);
 
     await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/player-session', expect.objectContaining({ method: 'POST' })));
-    await waitFor(() => expect(screen.getByText('Cups')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('当前进度')).toBeTruthy());
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/game/current/join', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/game/current', expect.objectContaining({ cache: 'no-store' }));
   });

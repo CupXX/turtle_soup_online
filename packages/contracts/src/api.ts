@@ -1,4 +1,5 @@
 import type {
+  ChallengeStatus,
   GameEndReason,
   GameStatus,
   JudgeVerdict,
@@ -18,6 +19,9 @@ export type ApiErrorCode =
   | 'QUEUE_BLOCKED'
   | 'RATE_LIMITED'
   | 'IDEMPOTENCY_CONFLICT'
+  | 'MESSAGE_NOT_CHALLENGEABLE'
+  | 'CHALLENGE_IN_PROGRESS'
+  | 'CHALLENGE_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 
 export type ApiErrorBody = {
@@ -31,6 +35,12 @@ export type ApiErrorBody = {
 export type ApiSuccess<T> = { data: T };
 
 export type CurrentGameResponse = ApiSuccess<PublicGameSnapshot | null>;
+
+export type ChallengeReceipt = {
+  challengeId: string;
+  messageId: string;
+  status: ChallengeStatus;
+};
 
 export type PublicGameStatus = GameStatus;
 export type PublicMessageStatus = MessageStatus;

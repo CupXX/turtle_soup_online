@@ -20,8 +20,17 @@ function statusText(message: GameMessage): string {
 
 export function MessageRow({ message, nickname, isOwn = false, onChallenge }: MessageRowProps) {
   const judged = message.status === 'JUDGED' && message.verdict;
+  const challengeStatus = message.challengeStatus ?? 'NONE';
+  const canChallenge = Boolean(judged && challengeStatus === 'NONE');
+  const challengeLabel = challengeStatus === 'PENDING'
+    ? '质疑中'
+    : challengeStatus === 'RESOLVED'
+      ? '已质疑'
+      : challengeStatus === 'FAILED'
+        ? '质疑失败'
+        : '质疑';
   return (
-    <article className="message-row" data-owner={isOwn ? 'self' : 'other'} data-status={message.status}>
+    <article className="message-row" data-owner={isOwn ? 'self' : 'other'} data-status={message.status} data-challenge-status={challengeStatus}>
       <div className="message-meta">
         <span className="message-sequence">#{message.sequenceNo}</span>
         <strong>{nickname}</strong>
@@ -36,9 +45,9 @@ export function MessageRow({ message, nickname, isOwn = false, onChallenge }: Me
         type="button"
         onClick={() => onChallenge?.(message)}
         aria-label={`质疑 ${nickname} 的问题`}
-        disabled={message.status === 'SENDING'}
+        disabled={!canChallenge}
       >
-        质疑
+        {challengeLabel}
       </button>
     </article>
   );

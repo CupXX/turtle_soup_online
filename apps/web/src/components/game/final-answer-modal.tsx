@@ -60,7 +60,7 @@ export function FinalAnswerModal({ open, disabled = false, onClose, onSubmit }: 
           </div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="关闭正答窗口">×</button>
         </div>
-        <p className="privacy-note">正答不会出现在公共问题流中。失败后只有当前页面暂时保留你输入的文字。</p>
+        <p className="privacy-note">正答不会出现在对话流中。失败后只有当前页面暂时保留你输入的文字。</p>
         <form className="stack-form" onSubmit={handleSubmit}>
           <label htmlFor="final-answer-input">正答</label>
           <textarea

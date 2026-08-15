@@ -75,6 +75,8 @@ describe('completeQuestion', () => {
     expect(keyPointQuery.toLowerCase()).not.toContain('for update');
     expect(query).toContain('on conflict (key_point_id) do nothing');
     expect(query).toContain('returning key_point_id');
+    expect(query).toContain('insert into private.question_judgments');
+    expect(query).toContain('original_covered_key_point_ids');
     expect(query).toContain('awarded_points = 2');
     expect(query).toContain('yes_count');
     expect(query).toContain("status = 'judged'");

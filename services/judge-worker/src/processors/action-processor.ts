@@ -7,6 +7,8 @@ import { SemanticJudgeRuntimeError } from '../runtime/semantic-judge.js';
 import { processQuestion, type ClaimedQuestionAction, type QuestionProcessorDependencies } from './question-processor.js';
 import { processFinalAnswer, type ClaimedFinalAnswerAction, type FinalAnswerProcessorDependencies } from './final-answer-processor.js';
 import { completeFinalAnswer, type CompleteFinalAnswerInput } from '../db/complete-final-answer.js';
+import { processChallenge, type ClaimedChallengeAction, type ChallengeProcessorDependencies } from './challenge-processor.js';
+import type { SkillRuntimeMetadata } from '../runtime/create-semantic-judge.js';
 
 type RetryCode = Exclude<JudgeErrorCode, 'LEASE_LOST'>;
 
@@ -18,6 +20,9 @@ export type ActionProcessorDependencies = {
   now?: Date;
   processQuestion?: (action: ClaimedQuestionAction, dependencies: QuestionProcessorDependencies) => Promise<void>;
   processFinalAnswer?: (action: ClaimedFinalAnswerAction, dependencies: FinalAnswerProcessorDependencies) => Promise<void>;
+  processChallenge?: (action: ClaimedChallengeAction, dependencies: ChallengeProcessorDependencies) => Promise<void>;
+  challengeJudgeFactory?: ChallengeProcessorDependencies['judgeFactory'];
+  challengeJudgeMetadata?: SkillRuntimeMetadata;
   recordRetry?: (actionId: string, attempt: number, code: RetryCode) => Promise<void>;
   markBlocked?: (actionId: string, code: RetryCode) => Promise<void>;
 };
@@ -66,7 +71,7 @@ export async function processClaimedAction(
         transaction: dependencies.transaction,
         now: dependencies.now,
       });
-    } else {
+    } else if (action.actionType === 'FINAL_ANSWER') {
       const runFinalAnswer = dependencies.processFinalAnswer ?? processFinalAnswer;
       await runFinalAnswer(action as ClaimedFinalAnswerAction, {
         judge: dependencies.judge,
@@ -75,6 +80,17 @@ export async function processClaimedAction(
         completeFinalAnswer: dependencies.transaction
           ? (input: CompleteFinalAnswerInput) => completeFinalAnswer(input, { transaction: dependencies.transaction, now: dependencies.now })
           : undefined,
+      });
+    } else {
+      const runChallenge = dependencies.processChallenge ?? processChallenge;
+      await runChallenge(action as ClaimedChallengeAction, {
+        judge: dependencies.judge,
+        judgeFactory: dependencies.challengeJudgeFactory,
+        judgeMetadata: dependencies.challengeJudgeMetadata,
+        workerId: dependencies.workerId,
+        sql: dependencies.sql,
+        transaction: dependencies.transaction,
+        now: dependencies.now,
       });
     }
   } catch (error) {

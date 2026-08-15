@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import type { PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
+import type { ChallengeReceipt, PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
 import { createBrowserSupabase, createRealtimeSubscribe } from '@/lib/supabase-browser';
-import { createPlayerSession, fetchCurrentGame, joinCurrentGame, postFinalAnswer, postQuestion, type FinalAnswerReceipt } from '@/lib/game-api';
+import { createPlayerSession, fetchCurrentGame, joinCurrentGame, postChallenge, postFinalAnswer, postQuestion, type FinalAnswerReceipt } from '@/lib/game-api';
 import { useGameRealtime, type RealtimeSubscribe } from '@/hooks/use-game-realtime';
 import { FinalAnswerModal } from './final-answer-modal';
 import { GameHeader } from './game-header';
@@ -26,6 +26,7 @@ export type GameClientProps = {
   enableFinalAnswer?: boolean;
   onNicknameSubmit?: (nickname: string) => void | Promise<void>;
   onMessageSubmit?: (content: string) => MessageSubmitResult | Promise<MessageSubmitResult>;
+  onChallengeSubmit?: (message: GameMessage) => ChallengeReceipt | void | Promise<ChallengeReceipt | void>;
   onFinalAnswerSubmit?: (answer: string) => FinalAnswerResult | Promise<FinalAnswerResult>;
   fetchSnapshot?: () => Promise<PublicGameSnapshot | null>;
   subscribe?: RealtimeSubscribe;
@@ -53,6 +54,7 @@ export function GameClient({
   enableFinalAnswer = true,
   onNicknameSubmit,
   onMessageSubmit,
+  onChallengeSubmit,
   onFinalAnswerSubmit,
   fetchSnapshot,
   subscribe,
@@ -62,6 +64,7 @@ export function GameClient({
   const [nicknameBusy, setNicknameBusy] = useState(false);
   const [nicknameError, setNicknameError] = useState<string>();
   const [localMessages, setLocalMessages] = useState<GameMessage[]>([]);
+  const [challengeStatuses, setChallengeStatuses] = useState<Record<string, NonNullable<PublicMessage['challengeStatus']>>>({});
   const [messageError, setMessageError] = useState<string>();
   const [privateFinalAnswer, setPrivateFinalAnswer] = useState<PrivateFinalAnswer>();
   const [finalAnswerOpen, setFinalAnswerOpen] = useState(false);
@@ -80,8 +83,12 @@ export function GameClient({
   const activePlayer = snapshot?.players.find((player) => player.id === activePlayerId) ?? snapshot?.players[0];
   const visibleMessages = useMemo(() => {
     const serverIds = new Set(snapshot?.messages.map((message) => message.id));
-    return [...(snapshot?.messages ?? []), ...localMessages.filter((message) => !serverIds.has(message.id))];
-  }, [localMessages, snapshot?.messages]);
+    return [...(snapshot?.messages ?? []), ...localMessages.filter((message) => !serverIds.has(message.id))].map((message) => {
+      const override = challengeStatuses[message.id];
+      if (!override || message.challengeStatus === 'RESOLVED' || message.challengeStatus === 'FAILED') return message;
+      return { ...message, challengeStatus: override };
+    });
+  }, [challengeStatuses, localMessages, snapshot?.messages]);
 
   const visiblePrivateFinalAnswer = useMemo(() => {
     const current = privateFinalAnswer;
@@ -183,6 +190,21 @@ export function GameClient({
     }
   }, [demo, onFinalAnswerSubmit, snapshot]);
 
+  const handleChallenge = useCallback((message: GameMessage) => {
+    if (!snapshot || snapshot.game.status !== 'ACTIVE' || message.status !== 'JUDGED' || !message.verdict || (message.challengeStatus ?? 'NONE') !== 'NONE') return;
+    setChallengeStatuses((statuses) => ({ ...statuses, [message.id]: 'PENDING' }));
+    const submit = onChallengeSubmit ?? (demo ? undefined : (value: GameMessage) => postChallenge(value.id));
+    if (!submit) return;
+    void Promise.resolve(submit(message))
+      .then((receipt) => {
+        if (receipt) setChallengeStatuses((statuses) => ({ ...statuses, [message.id]: receipt.status }));
+      })
+      .catch(() => {
+        setChallengeStatuses((statuses) => ({ ...statuses, [message.id]: 'FAILED' }));
+        setMessageError('质疑请求失败，请稍后重试。');
+      });
+  }, [demo, onChallengeSubmit, snapshot]);
+
   if (requireNickname && !nickname && !sessionPlayerId) {
     return <NicknameGate onSubmit={handleNicknameSubmit} error={nicknameError} busy={nicknameBusy} />;
   }
@@ -208,7 +230,7 @@ export function GameClient({
         <div className="dashboard-grid">
           <div className="dashboard-main">
             <PuzzlePanel game={snapshot.game} />
-            <MessageFeed messages={visibleMessages} players={snapshot.players} currentPlayerId={activePlayerId} events={snapshot.events} />
+            <MessageFeed messages={visibleMessages} players={snapshot.players} currentPlayerId={activePlayerId} events={snapshot.events} onChallenge={handleChallenge} />
             <GameRevealPanel reveal={snapshot.reveal} />
             {visiblePrivateFinalAnswer ? (
               <aside className="private-answer-note" aria-live="polite">
@@ -227,10 +249,10 @@ export function GameClient({
           </div>
           <aside className="dashboard-sidebar">
             <PlayerStatsPanel stats={snapshot.stats} />
-            <section className="sidebar-card">
-              <p className="eyebrow">当前玩家</p>
-              <strong>{activePlayer?.displayNickname ?? (nickname || '未设置昵称')}</strong>
-              <p className="muted">你的提问会进入同一条公开问题流，判定结果会显示在原问题右侧。</p>
+            <section className="sidebar-card progress-placeholder" aria-label="当前进度">
+              <p className="eyebrow">当前进度</p>
+              <strong>即将加入</strong>
+              <p className="muted">这里将展示本局的整体推进状态。</p>
             </section>
           </aside>
         </div>

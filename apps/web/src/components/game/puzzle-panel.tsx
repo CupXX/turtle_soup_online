@@ -5,8 +5,7 @@ export function PuzzlePanel({ game }: { game: PublicGame }) {
     <section className="puzzle-panel" aria-labelledby="puzzle-title">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">共享汤面</p>
-          <h2 id="puzzle-title">汤面</h2>
+          <h2 id="puzzle-title">当前汤面</h2>
         </div>
         <span className="progress-label">{game.discoveredKeyPointCount}/{game.keyPointTotal || '—'} 关键点已发现</span>
       </div>

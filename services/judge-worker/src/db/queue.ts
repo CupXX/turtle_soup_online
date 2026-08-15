@@ -18,7 +18,7 @@ export type ClaimedAction = {
   gameId: string;
   playerId: string;
   sequenceNo: number;
-  actionType: 'NORMAL_MESSAGE' | 'FINAL_ANSWER';
+  actionType: 'NORMAL_MESSAGE' | 'FINAL_ANSWER' | 'CHALLENGE';
   attempt: number;
   leaseOwner: string;
   leaseExpiresAt: string;
@@ -248,6 +248,30 @@ export async function markActionBlocked(
           error_code = ${code},
           updated_at = now()
       where id = ${actionId}
+    `;
+    await sql`
+      update private.message_challenges
+      set status = 'FAILED', updated_at = now()
+      where id = (
+        select result_resource_id
+        from private.game_actions
+        where id = ${actionId} and action_type = 'CHALLENGE'
+      )
+        and status = 'PENDING'
+    `;
+    await sql`
+      update api.messages
+      set challenge_status = 'FAILED', updated_at = now()
+      where id = (
+        select message_id
+        from private.message_challenges
+        where id = (
+          select result_resource_id
+          from private.game_actions
+          where id = ${actionId} and action_type = 'CHALLENGE'
+        )
+      )
+        and challenge_status = 'PENDING'
     `;
   });
 }

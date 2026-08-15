@@ -24,4 +24,14 @@ describe('PlayerStatsPanel', () => {
     expect(rows[2].textContent).toContain('Cups');
     expect(rows[2].textContent).toContain('—');
   });
+
+  it('shows the current-game question count between score and hit rate', () => {
+    render(<PlayerStatsPanel stats={stats} />);
+
+    expect(screen.getByRole('columnheader', { name: '本局提问数' })).toBeTruthy();
+    const alice = screen.getAllByRole('row')[1];
+    expect(alice.textContent).toContain('1');
+    expect(alice.textContent).toContain('2');
+    expect(alice.textContent).toContain('50%');
+  });
 });

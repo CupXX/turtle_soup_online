@@ -1,5 +1,4 @@
 import type { GameStatus, PublicGame } from '@turtle-soup/contracts';
-import Link from 'next/link';
 import { ConnectionStatusBadge } from './connection-status';
 import type { ConnectionStatus } from '@/hooks/use-game-realtime';
 
@@ -13,7 +12,7 @@ export function GameHeader({ game, playerCount, connection, activePlayer }: { ga
   return (
     <header className="game-header">
       <div>
-        <p className="eyebrow">海龟汤 / 单局现场</p>
+        <p className="eyebrow">在线多人AI海龟汤游戏</p>
         <h1>一起把故事拼完整</h1>
       </div>
       <div className="header-meta">
@@ -21,7 +20,6 @@ export function GameHeader({ game, playerCount, connection, activePlayer }: { ga
         <span className="muted">{playerCount} 位玩家</span>
         {activePlayer ? <span className="muted">你是 {activePlayer}</span> : null}
         <ConnectionStatusBadge status={connection} />
-        <Link className="text-link" href="/admin">管理入口</Link>
       </div>
     </header>
   );

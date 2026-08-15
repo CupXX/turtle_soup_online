@@ -11,6 +11,9 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   QUEUE_BLOCKED: '判定队列暂时阻塞。',
   RATE_LIMITED: '操作过于频繁，请稍后再试。',
   IDEMPOTENCY_CONFLICT: '请求标识已用于不同内容。',
+  MESSAGE_NOT_CHALLENGEABLE: '这条问题暂时不能质疑。',
+  CHALLENGE_IN_PROGRESS: '这条问题正在质疑中。',
+  CHALLENGE_UNAVAILABLE: '质疑服务暂时不可用。',
   INTERNAL_ERROR: '服务器暂时无法完成请求。',
 };
 

@@ -15,6 +15,7 @@
   "dependencies": {
     "@deepseek-ai/dsh": "0.1.0-rc.6",
     "@turtle-soup/contracts": "workspace:*",
+    "@turtle-soup/game-core": "workspace:*",
     "ajv": "8.20.0",
     "postgres": "3.4.9",
     "zod": "4.4.3"
