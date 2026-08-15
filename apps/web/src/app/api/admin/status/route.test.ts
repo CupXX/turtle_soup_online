@@ -49,12 +49,12 @@ describe('GET /api/admin/status', () => {
   it('returns only safe state and disables caching for an authenticated admin', async () => {
     validEnv();
     mocks.getDb.mockReturnValue('sql');
-    mocks.getAdminStatus.mockResolvedValue({ gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', errorCode: null, workerHealthy: false });
+    mocks.getAdminStatus.mockResolvedValue({ gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', actionStatus: null, errorCode: null, workerHealthy: false, keyPoints: [] });
 
     const response = await GET(new Request('http://localhost:3000/api/admin/status', { headers: { cookie: adminCookie() } }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    await expect(response.json()).resolves.toEqual({ data: { gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', errorCode: null, workerHealthy: false } });
+    await expect(response.json()).resolves.toEqual({ data: { gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', actionStatus: null, errorCode: null, workerHealthy: false, keyPoints: [] } });
   });
 });

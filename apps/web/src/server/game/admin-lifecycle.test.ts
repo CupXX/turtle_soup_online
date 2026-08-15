@@ -8,6 +8,7 @@ import {
   activateGame,
   createPreparation,
   forceEndGame,
+  getAdminStatus,
   replacePreparation,
   retryBlockedAction,
   retryExtraction,
@@ -49,6 +50,36 @@ describe('admin lifecycle', () => {
     expect(query).toContain('private.key_point_extraction_jobs');
     expect(fake.calls.find((call) => call.toLowerCase().includes('private.key_point_extraction_jobs'))).toContain('00000000-0000-4000-8000-000000000002');
     expect(query).toContain("'waiting'");
+  });
+
+  it('returns ordered extracted key points to the authenticated admin status boundary only', async () => {
+    const calls: string[] = [];
+    const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
+      const query = strings.reduce((text, chunk, index) => `${text}${chunk}${index < values.length ? String(values[index]) : ''}`, '');
+      calls.push(query);
+      const normalized = query.toLowerCase();
+      if (normalized.includes('from api.games')) return Promise.resolve([{ id: 'game-1', gameStatus: 'ACTIVE' }]);
+      if (normalized.includes('from private.key_points')) return Promise.resolve([
+        { ordinal: 1, content: '被蚊子叮醒' },
+        { ordinal: 2, content: '打蚊子但没打中' },
+        { ordinal: 3, content: '点燃蚊香' },
+      ]);
+      if (normalized.includes('private.worker_heartbeats')) return Promise.resolve([{ lastSeenAt: new Date().toISOString() }]);
+      return Promise.resolve([]);
+    }) as never;
+
+    const status = await getAdminStatus(sql);
+
+    expect(status).toMatchObject({
+      gameId: 'game-1',
+      keyPoints: [
+        { ordinal: 1, content: '被蚊子叮醒' },
+        { ordinal: 2, content: '打蚊子但没打中' },
+        { ordinal: 3, content: '点燃蚊香' },
+      ],
+    });
+    expect(status).not.toHaveProperty('fullSolution');
+    expect(calls.join('\n')).not.toContain('judge_attempts');
   });
 
   it('rejects creation when an open game already exists', async () => {

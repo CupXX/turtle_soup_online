@@ -82,7 +82,7 @@ describe('game API client', () => {
       .mockResolvedValueOnce(response({ nickname: 'host' }))
       .mockResolvedValueOnce(response({ gameId: 'game-1', status: 'WAITING' }))
       .mockResolvedValueOnce(response({ status: 'WAITING' }))
-      .mockResolvedValueOnce(response({ gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', errorCode: null, workerHealthy: true }))
+      .mockResolvedValueOnce(response({ gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', actionStatus: null, errorCode: null, workerHealthy: true, keyPoints: [] }))
       .mockResolvedValueOnce(response({ status: 'RETRY' }))
       .mockResolvedValueOnce(response({ gameId: 'game-1' }));
 

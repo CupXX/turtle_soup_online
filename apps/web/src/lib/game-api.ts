@@ -20,6 +20,7 @@ export type AdminStatusResponse = {
   actionStatus: string | null;
   errorCode: string | null;
   workerHealthy: boolean;
+  keyPoints: Array<{ ordinal: number; content: string }>;
 };
 
 type ApiEnvelope<T> = { data: T } | { error: { code?: string; message?: string; retryable?: boolean } };

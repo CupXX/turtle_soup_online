@@ -26,6 +26,7 @@ export type AdminStatus = {
   actionStatus: string | null;
   errorCode: string | null;
   workerHealthy: boolean;
+  keyPoints: Array<{ ordinal: number; content: string }>;
 };
 
 export type ForceEndResult = {
@@ -118,10 +119,10 @@ export async function getAdminStatus(sql: Sql): Promise<AdminStatus> {
   `;
   const game = games[0];
   if (!game) {
-    return { gameId: null, gameStatus: null, extractionStatus: null, actionStatus: null, errorCode: null, workerHealthy: false };
+    return { gameId: null, gameStatus: null, extractionStatus: null, actionStatus: null, errorCode: null, workerHealthy: false, keyPoints: [] };
   }
 
-  const [jobs, actions, heartbeats] = await Promise.all([
+  const [jobs, actions, heartbeats, keyPoints] = await Promise.all([
     sql<Array<{ status: string; errorCode: string | null }>>`
       select jobs.status, jobs.error_code as "errorCode"
       from private.key_point_extraction_jobs jobs
@@ -145,6 +146,12 @@ export async function getAdminStatus(sql: Sql): Promise<AdminStatus> {
       order by last_seen_at desc
       limit 1
     `,
+    sql<Array<{ ordinal: number; content: string }>>`
+      select ordinal, content
+      from private.key_points
+      where game_id = ${game.id}
+      order by ordinal asc
+    `,
   ]);
   const workerHealthy = isWorkerHealthy(heartbeats[0]?.lastSeenAt);
   return {
@@ -154,6 +161,7 @@ export async function getAdminStatus(sql: Sql): Promise<AdminStatus> {
     actionStatus: actions[0]?.status ?? null,
     errorCode: jobs[0]?.errorCode ?? null,
     workerHealthy,
+    keyPoints: keyPoints.map(({ ordinal, content }) => ({ ordinal, content })),
   };
 }
 

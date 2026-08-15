@@ -26,7 +26,7 @@ describe('AdminPanel', () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/admin/session') return Promise.resolve(new Response(JSON.stringify({ data: { nickname: '主持人' } }), { status: 200 }));
-      if (url === '/api/admin/status') return Promise.resolve(new Response(JSON.stringify({ data: { gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', errorCode: null, workerHealthy: true } }), { status: 200 }));
+      if (url === '/api/admin/status') return Promise.resolve(new Response(JSON.stringify({ data: { gameId: 'game-1', gameStatus: 'WAITING', extractionStatus: 'PENDING', actionStatus: null, errorCode: null, workerHealthy: true, keyPoints: [] } }), { status: 200 }));
       if (url === '/api/admin/games/current/preparation') return Promise.resolve(new Response(JSON.stringify({ data: { status: 'WAITING' } }), { status: 200 }));
       throw new Error(`unexpected url ${url}`);
     });

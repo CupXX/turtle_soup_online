@@ -16,6 +16,7 @@ import { AdminLoginForm, type AdminLoginInput } from './admin-login-form';
 import { ExtractionStatus, type ExtractionStatusValue } from './extraction-status';
 import { ForceEndControl } from './force-end-control';
 import { GamePreparationForm, type GamePreparationInput } from './game-preparation-form';
+import { AdminKeyPoints } from './admin-key-points';
 
 type AdminPanelProps = {
   demo?: boolean;
@@ -168,6 +169,7 @@ export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetry
           <div className="admin-main">
             <GamePreparationForm onSubmit={handlePreparation} busy={busy} error={error} />
             <ExtractionStatus status={status} message={statusMessage} onRetry={retryExtraction} />
+            {adminStatus?.keyPoints.length ? <AdminKeyPoints keyPoints={adminStatus.keyPoints} /> : null}
             {adminStatus?.actionStatus === 'BLOCKED' ? (
               <section className="admin-card status-card" aria-labelledby="blocked-action-title">
                 <div className="section-heading">
@@ -190,7 +192,7 @@ export function AdminPanel({ demo = false, onLogin, onPreparationSubmit, onRetry
             />
             <section className="admin-card sidebar-card">
               <p className="eyebrow">安全边界</p>
-              <p className="muted">管理台只显示状态、错误码和输入表单，不回显已保存的完整答案或隐藏线索。</p>
+              <p className="muted">管理台只显示状态、错误码、输入表单和已提取关键点，不回显已保存的汤底。</p>
             </section>
           </aside>
         </div>

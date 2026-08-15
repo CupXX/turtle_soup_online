@@ -648,6 +648,34 @@ thead th {
   color: #9a493b;
 }
 
+.admin-key-points-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-key-points-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.admin-key-point-ordinal {
+  flex: 0 0 auto;
+  color: var(--teal);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
 @media (max-width: 760px) {
   .admin-grid {
     grid-template-columns: 1fr;
