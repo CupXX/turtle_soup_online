@@ -10,7 +10,7 @@ describe('question judge prompt', () => {
       current_message: 'is the door relevant?',
     });
 
-    expect(QUESTION_JUDGE_PROMPT_VERSION).toBe('question-judge-v4');
+    expect(QUESTION_JUDGE_PROMPT_VERSION).toBe('question-judge-v5');
     expect(prompt).toContain('return YES');
     expect(prompt).toContain('return NO');
     expect(prompt).toContain('PHASE C - VERDICT');
@@ -22,15 +22,26 @@ describe('question judge prompt', () => {
     expect(prompt).toContain('explicit relevance-direction proposition');
     expect(prompt).toContain('semantic entailment, ordinary narrative consequences');
     expect(prompt).toContain('MATERIAL AMBIGUITY');
-    expect(prompt).toContain('definition boundary');
+    expect(prompt).toContain('Prefer the ordinary contextual reading');
+    expect(prompt).toContain('intention marker');
+    expect(prompt).toContain('physical action or over the stated target or result');
+    expect(prompt).toContain('Ordinary transitive action wording alone');
+    expect(prompt).toContain('direct and ordinary competing explanation');
+    expect(prompt).toContain('If that explanatory direction conflicts with the canonical solution, evaluate it as FALSE');
+    expect(prompt).not.toContain('broad evaluative category');
+    expect(prompt).not.toContain('broad or narrow definition');
     expect(prompt).toContain('NARROW SURFACE-EVENT SLOT BINDING');
-    expect(prompt).toContain('physical contact or result versus intended target');
+    expect(prompt).toContain('directly identifying the discriminative concrete value of the missing event slot');
+    expect(prompt).toContain('A person hears glass breaking');
+    expect(prompt).toContain('Was it the window that broke? => YES, include the key point');
+    expect(prompt).toContain('Did the sound come from the window? => YES, no key point');
     expect(prompt).toContain('A TRUE proposition inside a BOTH message');
     expect(prompt).toContain('Return every fully covered key-point ID');
     expect(prompt).toContain('explicitly state or unambiguously entail');
     expect(prompt).not.toContain('这个人死了吗');
     expect(prompt).not.toContain('故事里还有第二个人吗');
     expect(prompt).not.toContain('是不是有蚊子');
+    expect(prompt).not.toContain('蚊香');
   });
 
   it('includes only the fixed input and current message', () => {

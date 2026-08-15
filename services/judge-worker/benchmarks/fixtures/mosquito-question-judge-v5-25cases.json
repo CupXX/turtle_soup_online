@@ -1,0 +1,325 @@
+{
+  "dataset_name": "mosquito_question_judge_regression_v5",
+  "purpose": "Question Judge v5 普通语境判定、意图 scope 歧义与关键点覆盖回归测试",
+  "puzzle_id": "mosquito",
+  "verdict_enum": [
+    "YES",
+    "NO",
+    "BOTH",
+    "IRRELEVANT"
+  ],
+  "key_points": [
+    {
+      "id": "KP1",
+      "text": "他半夜醒来是因为被蚊子叮醒。"
+    },
+    {
+      "id": "KP2",
+      "text": "他打自己一巴掌是为了拍蚊子，但没有打着。"
+    },
+    {
+      "id": "KP3",
+      "text": "他随后点燃了蚊香。"
+    }
+  ],
+  "policy_summary": {
+    "unknown_unimportant_direct_fact": "直接询问汤底未规定、且既不参与解题机制也不构成当前异常事件直接竞争解释的孤立属性时，判 IRRELEVANT；不得把“汤底未提到”当作 NO。",
+    "implicit_competing_explanation": "简短状态、动机或属性若在当前异常汤面下直接、自然且明显地试探一条竞争解释路线，则属于相关命题；该方向与汤底冲突时判 NO。",
+    "relevance_question_override": "明确询问“X 是否与汤底/解题有关、X 是否重要/关键/需要考虑”时，对这个方向本身回答 YES 或 NO，不因 X 最终无关而返回 IRRELEVANT。",
+    "semantic_entailment": "按语义蕴含而不是字面匹配判定。真实的具体事实可以支持更抽象、更上位的正确表述。",
+    "coverage_independence": "Verdict 与 KP coverage 独立。YES 不自动意味着命中 KP；只有完整覆盖关键事实时才返回对应 KP。",
+    "multiple_coverage": "一句话可以同时覆盖多个 KP，必须返回全部完整命中的 KP。",
+    "mixed_statement": "一句话同时包含成立和不成立的相关主张时判 BOTH；其中完整成立的关键事实仍可计入 coverage。",
+    "both_semantics": "BOTH 用于混合真/假命题，或一句话本身存在两个同等自然、无法安全择一的语义/scope 解释且分别得到 YES/NO。优先采用普通上下文理解，不要为了制造分歧主动构造第二种定义。"
+  },
+  "cases": [
+    {
+      "id": "dead",
+      "question": "这个人死了吗？",
+      "expected_verdict": "NO",
+      "expected_coverage": [],
+      "policy_tags": [
+        "relevant_false_hypothesis"
+      ],
+      "gold_rationale": "死亡是对故事状态的具体假设，与汤底不符。"
+    },
+    {
+      "id": "second-person",
+      "question": "故事里还有第二个人参与吗？",
+      "expected_verdict": "NO",
+      "expected_coverage": [],
+      "policy_tags": [
+        "relevant_false_hypothesis"
+      ],
+      "gold_rationale": "这是有效的解谜方向，但汤底不存在第二个人参与。"
+    },
+    {
+      "id": "disability",
+      "question": "这个人有残疾吗？",
+      "expected_verdict": "IRRELEVANT",
+      "expected_coverage": [],
+      "policy_tags": [
+        "unknown_unimportant_attribute",
+        "no_closed_world_reasoning"
+      ],
+      "gold_rationale": "汤底未规定残疾与否，且该属性不参与解谜机制；不能把“未提到”当成 NO。"
+    },
+    {
+      "id": "self-hate",
+      "question": "这个人恨自己吗？",
+      "expected_verdict": "NO",
+      "expected_coverage": [],
+      "policy_tags": [
+        "implicit_competing_explanation",
+        "relevant_false_hypothesis"
+      ],
+      "gold_rationale": "在汤面已出现打自己这一异常动作时，恨自己/自我厌恶是自残方向的直接自然竞争解释；该解谜方向与汤底冲突，因此回答 NO。"
+    },
+    {
+      "id": "gender",
+      "question": "这个人是男人吗？",
+      "expected_verdict": "IRRELEVANT",
+      "expected_coverage": [],
+      "policy_tags": [
+        "unknown_unimportant_attribute"
+      ],
+      "gold_rationale": "性别不是谜底机制所需信息，汤底也未要求建立该设定。"
+    },
+    {
+      "id": "self-hate-cause",
+      "question": "他打自己是因为恨自己吗？",
+      "expected_verdict": "NO",
+      "expected_coverage": [],
+      "policy_tags": [
+        "relevant_false_hypothesis",
+        "causal_hypothesis"
+      ],
+      "gold_rationale": "“恨自己”一旦被用来解释谜面中的打自己行为，就成为相关但错误的因果假设。"
+    },
+    {
+      "id": "intentional-burning",
+      "question": "他是故意让某个东西燃烧的吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "semantic_entailment",
+        "abstraction",
+        "partial_fact_no_kp"
+      ],
+      "gold_rationale": "主动点燃蚊香语义上蕴含“故意让某个东西燃烧”，但还不足以完整覆盖 KP3。"
+    },
+    {
+      "id": "something-lit",
+      "question": "有东西被他点燃了吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "semantic_entailment",
+        "abstraction",
+        "partial_fact_no_kp"
+      ],
+      "gold_rationale": "点燃蚊香蕴含点燃了某样东西，但未识别蚊香这一完整关键事实。"
+    },
+    {
+      "id": "burning-is-coil",
+      "question": "燃烧的是蚊香吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [
+        "KP3"
+      ],
+      "policy_tags": [
+        "key_point_coverage"
+      ],
+      "gold_rationale": "直接识别燃烧物是蚊香，按当前游戏规则视为命中 KP3。"
+    },
+    {
+      "id": "smell-from-coil",
+      "question": "那股燃烧的味道来自蚊香吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "semantic_paraphrase",
+        "partial_fact_no_kp"
+      ],
+      "gold_rationale": "确认气味来源只能得到 YES；它没有表达点燃蚊香这一动作，因此不覆盖 KP3。"
+    },
+    {
+      "id": "mosquito-present",
+      "question": "是有蚊子吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "partial_fact_no_kp"
+      ],
+      "gold_rationale": "蚊子确实存在，但仅知道存在蚊子不足以覆盖“被蚊子叮醒”的 KP1。"
+    },
+    {
+      "id": "waking-related-to-mosquito",
+      "question": "他醒来和蚊子有关吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "semantic_entailment",
+        "partial_fact_no_kp"
+      ],
+      "gold_rationale": "醒来确实与蚊子有关，但表达仍过于宽泛，没有完整说出致醒机制。"
+    },
+    {
+      "id": "mosquito-woke",
+      "question": "他是被蚊子弄醒的吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [
+        "KP1"
+      ],
+      "policy_tags": [
+        "key_point_coverage",
+        "semantic_paraphrase"
+      ],
+      "gold_rationale": "语义上已经抓住蚊子导致他醒来的关键因果关系，按当前规则视为 KP1。"
+    },
+    {
+      "id": "bitten-awake",
+      "question": "他是被蚊子叮醒的吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [
+        "KP1"
+      ],
+      "policy_tags": [
+        "key_point_coverage"
+      ],
+      "gold_rationale": "直接完整覆盖 KP1。"
+    },
+    {
+      "id": "hit-mosquito",
+      "question": "打自己是想打蚊子吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "partial_fact_no_kp"
+      ],
+      "gold_rationale": "只确认了打自己的目的，没有确认“没打中”，因此不能覆盖 KP2。"
+    },
+    {
+      "id": "slap-missed",
+      "question": "他打自己其实是在拍蚊子，而且没有拍到，对吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [
+        "KP2"
+      ],
+      "policy_tags": [
+        "key_point_coverage",
+        "semantic_paraphrase"
+      ],
+      "gold_rationale": "同时覆盖打蚊子的目的和没有打中，完整覆盖 KP2。"
+    },
+    {
+      "id": "killed-mosquito",
+      "question": "他成功把蚊子拍死了吗？",
+      "expected_verdict": "NO",
+      "expected_coverage": [],
+      "policy_tags": [
+        "relevant_false_hypothesis"
+      ],
+      "gold_rationale": "汤底明确是没有打着，因此“成功拍死”不成立。"
+    },
+    {
+      "id": "both-with-kp",
+      "question": "他被蚊子叮醒了，但之后成功把蚊子打死了，对吗？",
+      "expected_verdict": "BOTH",
+      "expected_coverage": [
+        "KP1"
+      ],
+      "policy_tags": [
+        "mixed_true_false",
+        "key_point_coverage"
+      ],
+      "gold_rationale": "前半真且覆盖 KP1，后半假，所以总体为 BOTH；错误部分不阻止已完整真事实的 KP coverage。"
+    },
+    {
+      "id": "multi-kp-2-3",
+      "question": "他打蚊子没打中，然后点了蚊香，对吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [
+        "KP2",
+        "KP3"
+      ],
+      "policy_tags": [
+        "multi_key_point_coverage"
+      ],
+      "gold_rationale": "一句话同时完整覆盖 KP2 和 KP3，系统应允许返回多个关键点。"
+    },
+    {
+      "id": "full-chain",
+      "question": "他是被蚊子叮醒的，打自己是在拍蚊子但没拍中，后来点了蚊香，所以闻到燃烧味，对吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [
+        "KP1",
+        "KP2",
+        "KP3"
+      ],
+      "policy_tags": [
+        "multi_key_point_coverage",
+        "full_fact_chain"
+      ],
+      "gold_rationale": "完整覆盖三个关键事实，Question Judge 应返回 YES 并报告三个 KP。"
+    },
+    {
+      "id": "animal-related",
+      "question": "汤底跟动物有关吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "relevance_question_override",
+        "semantic_entailment",
+        "abstraction"
+      ],
+      "gold_rationale": "这是明确的“是否与 X 有关”方向问题，应回答 YES/NO；蚊子属于动物且参与核心机制，所以 YES。"
+    },
+    {
+      "id": "revenge-related",
+      "question": "汤底跟报仇有关吗？",
+      "expected_verdict": "NO",
+      "expected_coverage": [],
+      "policy_tags": [
+        "relevance_question_override"
+      ],
+      "gold_rationale": "这是明确的“是否与 X 有关”方向问题，应回答 YES/NO；报仇不参与谜底机制，所以 NO，而不是 IRRELEVANT。"
+    },
+    {
+      "id": "intentional-self-hit-ambiguous",
+      "question": "他是故意打自己的吗？",
+      "expected_verdict": "BOTH",
+      "expected_coverage": [],
+      "policy_tags": [
+        "material_ambiguity",
+        "both_semantics",
+        "action_vs_intent"
+      ],
+      "gold_rationale": "“故意打自己”有两种对谜题有意义的自然理解：他确实有意识地做出了这一巴掌动作，因此在动作层面可说是故意的；但他的目标不是伤害/击打自己，而是拍蚊子，因此在目的层面又不是。应回答 BOTH。"
+    },
+    {
+      "id": "hit-self-target-ambiguous",
+      "question": "他打的是自己吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "ordinary_contextual_reading",
+        "physical_patient"
+      ],
+      "gold_rationale": "普通默认语言理解询问实际动作对象；巴掌确实打在自己身上，因此回答 YES。不得自动改写为真正想打谁。"
+    },
+    {
+      "id": "violent-behavior-ambiguous",
+      "question": "这个人做了某种暴力行为吗？",
+      "expected_verdict": "YES",
+      "expected_coverage": [],
+      "policy_tags": [
+        "ordinary_contextual_reading",
+        "semantic_abstraction"
+      ],
+      "gold_rationale": "按普通上下文理解，扇自己一巴掌可合理归入暴力行为，因此回答 YES；不主动构造必须带伤害意图的窄定义来制造 BOTH。"
+    }
+  ],
+  "puzzle_surface": "一个人半夜醒来打了自己一巴掌，然后闻着一股燃烧的味道安心睡去了，请问发生了什么？",
+  "full_solution": "这个人被蚊子叮醒，打了一下没打着，然后点起了蚊香。"
+}

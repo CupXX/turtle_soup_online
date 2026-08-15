@@ -1,6 +1,6 @@
 import type { QuestionJudgeInput } from '@turtle-soup/contracts';
 
-export const QUESTION_JUDGE_PROMPT_VERSION = 'question-judge-v4';
+export const QUESTION_JUDGE_PROMPT_VERSION = 'question-judge-v5';
 
 export function buildQuestionJudgePrompt(input: QuestionJudgeInput): string {
   return [
@@ -28,7 +28,9 @@ export function buildQuestionJudgePrompt(input: QuestionJudgeInput): string {
     'PHASE B - EVALUATE',
     'Evaluate each material proposition or natural interpretation separately as TRUE, FALSE, or INCIDENTAL/UNSPECIFIED.',
     'For an explicit relevance-direction proposition, evaluate the relationship itself: materially related is TRUE and materially unrelated is FALSE. Do not label the relationship INCIDENTAL merely because its subject is unrelated.',
-    'A state hypothesis about a person or object explicitly central to puzzle_surface is puzzle-relevant when that state would materially change the interpretation of the surface events.',
+    'A standalone state, motive, or attribute may be puzzle-relevant when, in the immediate context of a salient or abnormal surface event, it functions as a direct and ordinary competing explanation for that event.',
+    'If that explanatory direction conflicts with the canonical solution, evaluate it as FALSE.',
+    'The connection must be direct, ordinary, and strongly suggested by the specific surface event. Do not make an attribute relevant merely because some hypothetical causal connection can be imagined.',
     'A useful partial or abstract proposition may be TRUE without covering any key point.',
     '',
     'PHASE C - VERDICT',
@@ -42,13 +44,11 @@ export function buildQuestionJudgePrompt(input: QuestionJudgeInput): string {
     'Do not use BOTH as an uncertainty fallback.',
     '',
     'MATERIAL AMBIGUITY',
-    'For a short action or intention question, check separately:',
-    '- conscious physical action versus intended goal or purpose;',
-    '- physical contact or result versus intended target.',
-    'If both readings are natural and puzzle-relevant, and one is TRUE while the other is FALSE, return BOTH.',
-    'For a broad evaluative category or ordinary-language definition boundary, preserve BOTH only when at least two interpretations are ordinary in the current context, materially relevant to the puzzle, and genuinely split TRUE and FALSE.',
-    'Do not manufacture a legal, technical, or specialized interpretation unless the wording or context invites it.',
-    'Do not silently select one preferred broad or narrow definition when two ordinary contextual definitions genuinely split the answer.',
+    'Use BOTH for genuine semantic or scope ambiguity only when the sentence itself has two equally natural, contextually immediate readings and choosing either one would materially mislead the player.',
+    'A merely possible or constructed alternative interpretation is not enough. Prefer the ordinary contextual reading.',
+    'When an intention marker such as deliberately, intentionally, or on purpose can naturally scope either over the physical action or over the stated target or result, and the canonical story makes those readings split TRUE and FALSE, return BOTH.',
+    'Ordinary transitive action wording alone does not create ambiguity between the actual participant or patient and an intended target. Read it as the ordinary actual action relation unless the message explicitly asks what the person wanted, intended, or tried to affect.',
+    'Do not manufacture an alternative definition merely to create a YES/NO split. A definition boundary by itself is normally insufficient for BOTH.',
     '',
     'PHASE D - KEY-POINT COVERAGE',
     'Determine key-point coverage independently from the overall verdict, using the propositions already parsed and evaluated.',
@@ -62,6 +62,7 @@ export function buildQuestionJudgePrompt(input: QuestionJudgeInput): string {
     'The player states or semantically paraphrases the complete hidden fact. Include the key-point ID.',
     '',
     'COVERAGE TYPE 2 - NARROW SURFACE-EVENT SLOT BINDING',
+    'When the surface already anchors a specific event or state, directly identifying the discriminative concrete value of the missing event slot may itself count as discovering the key point, even when the hidden action verb is omitted.',
     'Include the key-point ID only when all conditions hold:',
     '1. puzzle_surface already presents a specific anchored event, state, or signal;',
     '2. current_message directly refers to that same anchored event, state, or signal;',
@@ -72,6 +73,12 @@ export function buildQuestionJudgePrompt(input: QuestionJudgeInput): string {
     '7. the message is not merely a generic event-existence claim;',
     '8. the message is not merely a downstream sensory effect, source relation, broad association, or multi-hop causal implication.',
     'This bridge resolves a surface-anchored event slot; it is not permission to reconstruct the answer on the player\'s behalf.',
+    'ABSTRACT COVERAGE CONTRAST',
+    'Surface: A person hears glass breaking.',
+    'Solution/key point: The person broke a window.',
+    'Did something break? => YES, no key point.',
+    'Was it the window that broke? => YES, include the key point.',
+    'Did the sound come from the window? => YES, no key point.',
     '',
     'COVERAGE TYPE 3 - PARTIAL OR INFERRED INFORMATION',
     'Do not include a key-point ID when the message gives only a related entity, broad relevance, one conjunct of a multi-part fact, a purpose without its required result, a result without its required cause, a generic event, a sensory/source relation, or information that needs full_solution to add an undiscovered hidden conjunct.',

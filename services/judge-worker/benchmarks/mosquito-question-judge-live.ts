@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { JudgeVerdict, QuestionJudgeInput, QuestionJudgeResult } from '@turtle-soup/contracts';
@@ -11,12 +11,14 @@ import type {
   QuestionJudgeGoldCase,
   QuestionJudgeGoldFixture,
   RegressionAttempt,
+  RegressionResultsDocument,
 } from './question-judge-regression.js';
 import {
   evaluateAttempt,
   classifyFailure,
   loadQuestionJudgeFixture,
   renderRegressionReport,
+  renderVersionComparison,
   serializeRegressionResults,
   summarizeAttempts,
 } from './question-judge-regression.js';
@@ -34,8 +36,10 @@ export const MODEL_CONFIGURATIONS = [
   { label: 'DeepSeek Pro / off', provider: 'deepseek', model: 'deepseek-v4-pro', reasoningEffort: 'off' as const },
 ] as const;
 
-export const FORMAL_REPORT_PATH = resolve(process.cwd(), 'docs/reports/2026-08-15-mosquito-question-judge-v4-25case-3config-5round.md');
-export const FORMAL_RESULTS_PATH = resolve(process.cwd(), 'docs/reports/2026-08-15-mosquito-question-judge-v4-25case-3config-5round.results.json');
+const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+export const FORMAL_REPORT_PATH = resolve(REPOSITORY_ROOT, 'docs/reports/2026-08-15-mosquito-question-judge-v5-25case-3config-5round.md');
+export const FORMAL_RESULTS_PATH = resolve(REPOSITORY_ROOT, 'docs/reports/2026-08-15-mosquito-question-judge-v5-25case-3config-5round.results.json');
+export const HISTORICAL_V4_RESULTS_PATH = resolve(REPOSITORY_ROOT, 'docs/reports/2026-08-15-mosquito-question-judge-v4-25case-3config-5round.results.json');
 
 export type LiveBenchmarkOptions = {
   rounds: number;
@@ -53,7 +57,9 @@ export type LiveBenchmarkDependencies = {
   loadFixture?: () => Promise<QuestionJudgeGoldFixture>;
   judgeFactory?: (configuration: (typeof MODEL_CONFIGURATIONS)[number]) => BenchmarkJudge | Promise<BenchmarkJudge>;
   writeFile?: typeof writeFile;
+  readFile?: typeof readFile;
   mkdir?: typeof mkdir;
+  frozenCommit?: string;
   now?: () => Date;
   log?: (line: string) => void;
 };
@@ -148,6 +154,23 @@ export async function runQuestionJudgeRegression(
   dependencies: LiveBenchmarkDependencies = {},
 ): Promise<{ fixture: QuestionJudgeGoldFixture; attempts: RegressionAttempt[]; reportPath: string; resultsPath: string }> {
   const fixture = await (dependencies.loadFixture ?? loadQuestionJudgeFixture)();
+  const frozenCommit = (
+    dependencies.frozenCommit !== undefined
+      ? dependencies.frozenCommit
+      : process.env.BENCHMARK_FROZEN_COMMIT
+  )?.trim() ?? '';
+  let historicalV4Attempts: RegressionAttempt[] | null = null;
+  if (options.writeReports) {
+    if (!/^[0-9a-f]{40}$/i.test(frozenCommit)) {
+      throw new Error('BENCHMARK_FROZEN_COMMIT must contain the full 40-character commit hash before a report-writing run');
+    }
+    const read = dependencies.readFile ?? readFile;
+    const historical = JSON.parse(await read(HISTORICAL_V4_RESULTS_PATH, 'utf8')) as RegressionResultsDocument;
+    if (historical.dataset !== 'mosquito_question_judge_regression_v4' || !Array.isArray(historical.attempts)) {
+      throw new Error('historical v4 benchmark results are missing or invalid');
+    }
+    historicalV4Attempts = historical.attempts;
+  }
   const selectedCases = options.caseIds === null
     ? fixture.cases
     : options.caseIds.map((id) => {
@@ -239,8 +262,8 @@ export async function runQuestionJudgeRegression(
     schemaVersion: 'judge-schema-v1',
     rounds: options.rounds,
     configurations: MODEL_CONFIGURATIONS.map(({ label, provider, model, reasoningEffort }) => ({ label, provider, model, reasoningEffort })),
-    fixturePath: 'services/judge-worker/benchmarks/fixtures/mosquito-question-judge-v4-25cases.json',
-    frozenCommit: process.env.BENCHMARK_FROZEN_COMMIT ?? null,
+    fixturePath: 'services/judge-worker/benchmarks/fixtures/mosquito-question-judge-v5-25cases.json',
+    frozenCommit: frozenCommit || null,
   };
   const reportPath = options.reportPath ?? FORMAL_REPORT_PATH;
   const resultsPath = options.resultsPath ?? FORMAL_RESULTS_PATH;
@@ -249,7 +272,9 @@ export async function runQuestionJudgeRegression(
     const makeDirectory = dependencies.mkdir ?? mkdir;
     await makeDirectory(dirname(reportPath), { recursive: true });
     await makeDirectory(dirname(resultsPath), { recursive: true });
-    await write(reportPath, renderRegressionReport(fixture, attempts, metadata), 'utf8');
+    const baseReport = renderRegressionReport(fixture, attempts, metadata).trimEnd();
+    const versionComparison = renderVersionComparison(historicalV4Attempts ?? [], attempts, fixture).trimEnd();
+    await write(reportPath, `${baseReport}\n\n${versionComparison}\n`, 'utf8');
     await write(resultsPath, serializeRegressionResults(attempts, metadata), 'utf8');
   }
 

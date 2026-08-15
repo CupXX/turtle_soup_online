@@ -3,12 +3,22 @@ import type { QuestionJudgeInput, QuestionJudgeResult } from '@turtle-soup/contr
 import {
   MODEL_CONFIGURATIONS,
   FIXED_KEY_POINTS,
+  FORMAL_REPORT_PATH,
+  FORMAL_RESULTS_PATH,
+  HISTORICAL_V4_RESULTS_PATH,
   parseLiveBenchmarkArgs,
   runQuestionJudgeRegression,
 } from './mosquito-question-judge-live.js';
 import { loadQuestionJudgeFixture } from './question-judge-regression.js';
 
 describe('live question judge benchmark runner', () => {
+  it('writes v5 artifacts without reusing the historical v4 paths', () => {
+    expect(FORMAL_REPORT_PATH).toContain('question-judge-v5');
+    expect(FORMAL_RESULTS_PATH).toContain('question-judge-v5');
+    expect(HISTORICAL_V4_RESULTS_PATH).toContain('question-judge-v4');
+    expect(FORMAL_RESULTS_PATH).not.toBe(HISTORICAL_V4_RESULTS_PATH);
+  });
+
   it('parses rounds, case filters, and report mode', () => {
     expect(parseLiveBenchmarkArgs(['--rounds', '5'])).toEqual({ rounds: 5, caseIds: null, writeReports: true });
     expect(parseLiveBenchmarkArgs(['--rounds', '1', '--cases', 'disability,self-hate-cause', '--no-write'])).toEqual({
@@ -67,5 +77,15 @@ describe('live question judge benchmark runner', () => {
     expect(result.attempts.filter(({ errorCode }) => errorCode === 'TRANSPORT_ERROR')).toHaveLength(1);
     expect(calls).toBe(6);
     expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('refuses a report-writing run before any model call when no frozen commit is recorded', async () => {
+    const factory = vi.fn();
+    await expect(runQuestionJudgeRegression({ rounds: 1, caseIds: ['dead'], writeReports: true }, {
+      judgeFactory: factory,
+      frozenCommit: '',
+      log: () => undefined,
+    })).rejects.toThrow('BENCHMARK_FROZEN_COMMIT');
+    expect(factory).not.toHaveBeenCalled();
   });
 });

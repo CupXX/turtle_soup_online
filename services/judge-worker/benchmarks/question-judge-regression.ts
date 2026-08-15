@@ -32,12 +32,14 @@ export type QuestionJudgeGoldFixture = {
   cases: QuestionJudgeGoldCase[];
 };
 
-const DEFAULT_FIXTURE_URL = new URL('./fixtures/mosquito-question-judge-v4-25cases.json', import.meta.url);
+const DEFAULT_FIXTURE_URL = new URL('./fixtures/mosquito-question-judge-v5-25cases.json', import.meta.url);
 const DISPUTED_CASES: Record<string, { verdict: JudgeVerdict; coverage: readonly string[] }> = {
+  'self-hate': { verdict: 'NO', coverage: [] },
   'burning-is-coil': { verdict: 'YES', coverage: ['KP3'] },
   'smell-from-coil': { verdict: 'YES', coverage: [] },
   'intentional-self-hit-ambiguous': { verdict: 'BOTH', coverage: [] },
-  'violent-behavior-ambiguous': { verdict: 'BOTH', coverage: [] },
+  'hit-self-target-ambiguous': { verdict: 'YES', coverage: [] },
+  'violent-behavior-ambiguous': { verdict: 'YES', coverage: [] },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -202,8 +204,10 @@ export type AttemptSummary = {
   validResults: number;
   verdictCorrect: number;
   coverageCorrect: number;
+  jointCorrect: number;
   verdictAccuracy: number;
   coverageAccuracy: number;
+  jointAccuracy: number;
   validVerdictAccuracy: number | null;
   validCoverageAccuracy: number | null;
   averageLatencyMs: number | null;
@@ -258,13 +262,18 @@ function summarizeGroup(attempts: RegressionAttempt[]): AttemptSummary {
   }
   const total = attempts.length;
   const validAttempts = attempts.filter(({ schemaValid }) => schemaValid);
+  const jointCorrect = attempts.filter(({ schemaValid, verdictCorrect, coverageCorrect }) => (
+    schemaValid && verdictCorrect && coverageCorrect
+  )).length;
   return {
     total,
     validResults: attempts.filter(({ schemaValid }) => schemaValid).length,
     verdictCorrect: attempts.filter(({ verdictCorrect }) => verdictCorrect).length,
     coverageCorrect: attempts.filter(({ coverageCorrect }) => coverageCorrect).length,
+    jointCorrect,
     verdictAccuracy: total ? attempts.filter(({ verdictCorrect }) => verdictCorrect).length / total : 0,
     coverageAccuracy: total ? attempts.filter(({ coverageCorrect }) => coverageCorrect).length / total : 0,
+    jointAccuracy: total ? jointCorrect / total : 0,
     validVerdictAccuracy: validAttempts.length ? validAttempts.filter(({ verdictCorrect }) => verdictCorrect).length / validAttempts.length : null,
     validCoverageAccuracy: validAttempts.length ? validAttempts.filter(({ coverageCorrect }) => coverageCorrect).length / validAttempts.length : null,
     averageLatencyMs: latencies.length ? latencies.reduce((sum, value) => sum + value, 0) / latencies.length : null,
@@ -327,8 +336,9 @@ export function renderRegressionReport(
   metadata: RegressionReportMetadata,
 ): string {
   const aggregate = summarizeAttempts(attempts);
+  const versionLabel = metadata.promptVersion.replace('question-judge-', '');
   const lines: string[] = [
-    `# Mosquito Question Judge v4 — 25-case, ${metadata.configurations.length}-configuration, 5-round comparison`,
+    `# Mosquito Question Judge ${versionLabel} — 25-case, ${metadata.configurations.length}-configuration, ${metadata.rounds}-round comparison`,
     '',
     `- Generated: ${metadata.generatedAt}`,
     `- Fixture: ${metadata.fixturePath}`,
@@ -344,13 +354,13 @@ export function renderRegressionReport(
     '',
     '## Configuration comparison',
     '',
-    '| Configuration | Attempts | Valid | Verdict accuracy | Valid verdict accuracy | KP coverage accuracy | Valid KP coverage accuracy | Avg ms | P50 ms | P95 ms | Input tokens | Output tokens | Failures |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+    '| Configuration | Attempts | Valid | Verdict accuracy | KP coverage accuracy | Strict joint accuracy | Valid verdict accuracy | Valid KP coverage accuracy | Avg ms | P50 ms | P95 ms | Input tokens | Output tokens | Failures |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
   ];
   for (const configuration of metadata.configurations) {
     const summary = aggregate.byConfiguration[configuration.label];
     if (!summary) continue;
-    lines.push(`| ${configuration.label} | ${summary.total} | ${summary.validResults} | ${formatPercent(summary.verdictAccuracy)} | ${summary.validVerdictAccuracy === null ? 'N/A' : formatPercent(summary.validVerdictAccuracy)} | ${formatPercent(summary.coverageAccuracy)} | ${summary.validCoverageAccuracy === null ? 'N/A' : formatPercent(summary.validCoverageAccuracy)} | ${formatNumber(summary.averageLatencyMs)} | ${formatNumber(summary.p50LatencyMs)} | ${formatNumber(summary.p95LatencyMs)} | ${summary.inputTokens ?? 'N/A'} | ${summary.outputTokens ?? 'N/A'} | ${formatFailureSummary(summary.failures)} |`);
+    lines.push(`| ${configuration.label} | ${summary.total} | ${summary.validResults} | ${formatPercent(summary.verdictAccuracy)} | ${formatPercent(summary.coverageAccuracy)} | ${formatPercent(summary.jointAccuracy)} | ${summary.validVerdictAccuracy === null ? 'N/A' : formatPercent(summary.validVerdictAccuracy)} | ${summary.validCoverageAccuracy === null ? 'N/A' : formatPercent(summary.validCoverageAccuracy)} | ${formatNumber(summary.averageLatencyMs)} | ${formatNumber(summary.p50LatencyMs)} | ${formatNumber(summary.p95LatencyMs)} | ${summary.inputTokens ?? 'N/A'} | ${summary.outputTokens ?? 'N/A'} | ${formatFailureSummary(summary.failures)} |`);
   }
   lines.push(
     '',
@@ -358,9 +368,24 @@ export function renderRegressionReport(
     '',
     `- Verdict accuracy: ${formatPercent(aggregate.overall.verdictAccuracy)} (${aggregate.overall.verdictCorrect}/${aggregate.overall.total})`,
     `- Key-point coverage accuracy: ${formatPercent(aggregate.overall.coverageAccuracy)} (${aggregate.overall.coverageCorrect}/${aggregate.overall.total})`,
+    `- Strict joint accuracy: ${formatPercent(aggregate.overall.jointAccuracy)} (${aggregate.overall.jointCorrect}/${aggregate.overall.total})`,
     `- Valid result rate: ${formatPercent(aggregate.overall.total ? aggregate.overall.validResults / aggregate.overall.total : 0)}`,
     `- Latency: average ${formatNumber(aggregate.overall.averageLatencyMs)} ms, P50 ${formatNumber(aggregate.overall.p50LatencyMs)} ms, P95 ${formatNumber(aggregate.overall.p95LatencyMs)} ms`,
     `- Token/cost fields are authoritative provider values only; absent values remain N/A.`,
+    '',
+    '## Actual verdict distribution',
+    '',
+    '| Configuration | YES | NO | BOTH | IRRELEVANT | Invalid |',
+    '| --- | ---: | ---: | ---: | ---: | ---: |',
+  );
+  for (const configuration of metadata.configurations) {
+    const configurationAttempts = attempts.filter((attempt) => attempt.configuration === configuration.label);
+    const verdictCount = (verdict: JudgeVerdict) => configurationAttempts.filter((attempt) => (
+      attempt.schemaValid && attempt.actualVerdict === verdict
+    )).length;
+    lines.push(`| ${configuration.label} | ${verdictCount('YES')} | ${verdictCount('NO')} | ${verdictCount('BOTH')} | ${verdictCount('IRRELEVANT')} | ${configurationAttempts.filter(({ schemaValid }) => !schemaValid).length} |`);
+  }
+  lines.push(
     '',
     '## Case stability and failure categories',
     '',
@@ -405,6 +430,58 @@ export function renderRegressionReport(
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
+const V4_V5_FOCUS_CASE_IDS = [
+  'self-hate',
+  'intentional-self-hit-ambiguous',
+  'hit-self-target-ambiguous',
+  'violent-behavior-ambiguous',
+  'burning-is-coil',
+] as const;
+
+function goldLabel(verdict: JudgeVerdict | undefined, coverage: readonly string[] | undefined): string {
+  if (!verdict) return 'not run';
+  return `${verdict} / ${coverage?.join(', ') || '—'}`;
+}
+
+function accuracyLabel(summary: AttemptSummary | undefined): string {
+  if (!summary) return 'not run';
+  return `${formatPercent(summary.verdictAccuracy)} / ${formatPercent(summary.coverageAccuracy)} / ${formatPercent(summary.jointAccuracy)}`;
+}
+
+export function renderVersionComparison(
+  v4Attempts: RegressionAttempt[],
+  v5Attempts: RegressionAttempt[],
+  v5Fixture: QuestionJudgeGoldFixture,
+): string {
+  const v4Aggregate = summarizeAttempts(v4Attempts);
+  const v5Aggregate = summarizeAttempts(v5Attempts);
+  const lines = [
+    '## v4 → v5 focused comparison',
+    '',
+    '| Case | v4 gold | v5 gold | v4 verdict / KP / strict | v5 verdict / KP / strict |',
+    '| --- | --- | --- | --- | --- |',
+  ];
+  for (const caseId of V4_V5_FOCUS_CASE_IDS) {
+    const v4Gold = v4Attempts.find((attempt) => attempt.caseId === caseId);
+    const v5Gold = v5Fixture.cases.find((testCase) => testCase.id === caseId);
+    lines.push(`| ${caseId} | ${goldLabel(v4Gold?.expectedVerdict, v4Gold?.expectedCoverage)} | ${goldLabel(v5Gold?.expected_verdict, v5Gold?.expected_coverage)} | ${accuracyLabel(v4Aggregate.byCase[caseId])} | ${accuracyLabel(v5Aggregate.byCase[caseId])} |`);
+  }
+
+  const focusIds = new Set<string>(V4_V5_FOCUS_CASE_IDS);
+  const v4CaseIds = [...new Set(v4Attempts.map(({ caseId }) => caseId))];
+  const previouslyStableCaseIds = v4CaseIds.filter((caseId) => (
+    !focusIds.has(caseId) && v4Aggregate.byCase[caseId]?.jointAccuracy === 1
+  ));
+  const regressedCaseIds = previouslyStableCaseIds.filter((caseId) => v5Aggregate.byCase[caseId]?.jointAccuracy !== 1);
+  lines.push(
+    '',
+    `- Previously 100%-stable non-focus cases: ${previouslyStableCaseIds.length} checked; ${regressedCaseIds.length} regressed.`,
+    `- Regressed case IDs: ${regressedCaseIds.join(', ') || 'none'}.`,
+    '',
+  );
+  return lines.join('\n');
+}
+
 export type RegressionResultsDocument = {
   dataset: string;
   generatedAt: string;
@@ -420,7 +497,7 @@ export function serializeRegressionResults(
   metadata: RegressionReportMetadata,
 ): string {
   const document: RegressionResultsDocument = {
-    dataset: 'mosquito_question_judge_regression_v4',
+    dataset: 'mosquito_question_judge_regression_v5',
     generatedAt: metadata.generatedAt,
     promptVersion: metadata.promptVersion,
     schemaVersion: metadata.schemaVersion,
