@@ -153,7 +153,9 @@ describe('admin lifecycle', () => {
     const result = await retryExtraction('00000000-0000-4000-8000-000000000001', { transaction: fake.transaction });
 
     expect(result).toBeUndefined();
-    expect(fake.calls.join('\n').toLowerCase()).toContain("status = 'retry'");
+    const query = fake.calls.join('\n').toLowerCase();
+    expect(query).toContain("status = 'retry'");
+    expect(query).toContain('attempt_count = 0');
   });
 
   it('returns a blocked action head to RETRY without exposing its private payload', async () => {

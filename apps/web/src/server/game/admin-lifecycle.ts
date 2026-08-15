@@ -314,6 +314,7 @@ export async function retryExtraction(
     await sql`
       update private.key_point_extraction_jobs
       set status = 'RETRY',
+          attempt_count = 0,
           next_attempt_at = now(),
           lease_owner = null,
           lease_expires_at = null,

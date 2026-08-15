@@ -90,8 +90,8 @@ async function main(): Promise<void> {
   assert(current.game.status === 'ACTIVE', 'the current game must be ACTIVE');
 
   const suffix = Date.now().toString(36);
-  const first = await apiRequest<{ playerId: string }>('/api/player-session', { method: 'POST', jar: firstJar, body: { nickname: `Realtime甲${suffix}` } });
-  const second = await apiRequest<{ playerId: string }>('/api/player-session', { method: 'POST', jar: secondJar, body: { nickname: `Realtime乙${suffix}` } });
+  const first = await apiRequest<{ playerId: string }>('/api/player-session', { method: 'POST', jar: firstJar, body: { nickname: `RealtimeA-${suffix}` } });
+  const second = await apiRequest<{ playerId: string }>('/api/player-session', { method: 'POST', jar: secondJar, body: { nickname: `RealtimeB-${suffix}` } });
   await apiRequest('/api/game/current/join', { method: 'POST', jar: firstJar, body: {} });
   await apiRequest('/api/game/current/join', { method: 'POST', jar: secondJar, body: {} });
 
@@ -118,6 +118,8 @@ async function main(): Promise<void> {
   } finally {
     realtime.dispose();
     await supabase.removeChannel(realtime.channel);
+    await supabase.removeAllChannels();
+    await supabase.realtime.disconnect();
   }
 }
 

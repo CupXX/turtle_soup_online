@@ -18,6 +18,8 @@ RUN pnpm install --frozen-lockfile --prod=false --filter @turtle-soup/judge-work
 COPY packages/contracts packages/contracts
 COPY services/judge-worker services/judge-worker
 COPY spikes/deepseek-harness/profile.patch.yml spikes/deepseek-harness/profile.patch.yml
+COPY spikes/deepseek-harness/reasoning-high.patch.yml spikes/deepseek-harness/reasoning-high.patch.yml
+COPY spikes/deepseek-harness/reasoning-max.patch.yml spikes/deepseek-harness/reasoning-max.patch.yml
 
 RUN pnpm --filter @turtle-soup/judge-worker build
 
