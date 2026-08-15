@@ -96,6 +96,8 @@ describe('question judge 25-case fixture', () => {
     }];
     const aggregate = summarizeAttempts(attempts);
     expect(aggregate.overall.verdictAccuracy).toBe(1);
+    expect(aggregate.overall.validVerdictAccuracy).toBe(1);
+    expect(aggregate.overall.validCoverageAccuracy).toBe(1);
     expect(aggregate.byConfiguration['Test / none'].p95LatencyMs).toBe(12);
     const metadata = {
       generatedAt: '2026-08-15T00:00:00.000Z',
@@ -108,6 +110,8 @@ describe('question judge 25-case fixture', () => {
     };
     const report = renderRegressionReport(await loadQuestionJudgeFixture(), attempts, metadata);
     expect(report).toContain('Test / none');
+    expect(report).toContain('Regression checks');
+    expect(report).toContain('Recommendation');
     expect(report).not.toContain('这个人被蚊子叮醒');
     expect(JSON.parse(serializeRegressionResults(attempts, metadata)).attempts).toHaveLength(1);
   });

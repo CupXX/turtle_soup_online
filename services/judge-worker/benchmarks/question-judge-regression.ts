@@ -204,6 +204,8 @@ export type AttemptSummary = {
   coverageCorrect: number;
   verdictAccuracy: number;
   coverageAccuracy: number;
+  validVerdictAccuracy: number | null;
+  validCoverageAccuracy: number | null;
   averageLatencyMs: number | null;
   p50LatencyMs: number | null;
   p95LatencyMs: number | null;
@@ -255,6 +257,7 @@ function summarizeGroup(attempts: RegressionAttempt[]): AttemptSummary {
     for (const category of attempt.failureCategories) failures[category] += 1;
   }
   const total = attempts.length;
+  const validAttempts = attempts.filter(({ schemaValid }) => schemaValid);
   return {
     total,
     validResults: attempts.filter(({ schemaValid }) => schemaValid).length,
@@ -262,6 +265,8 @@ function summarizeGroup(attempts: RegressionAttempt[]): AttemptSummary {
     coverageCorrect: attempts.filter(({ coverageCorrect }) => coverageCorrect).length,
     verdictAccuracy: total ? attempts.filter(({ verdictCorrect }) => verdictCorrect).length / total : 0,
     coverageAccuracy: total ? attempts.filter(({ coverageCorrect }) => coverageCorrect).length / total : 0,
+    validVerdictAccuracy: validAttempts.length ? validAttempts.filter(({ verdictCorrect }) => verdictCorrect).length / validAttempts.length : null,
+    validCoverageAccuracy: validAttempts.length ? validAttempts.filter(({ coverageCorrect }) => coverageCorrect).length / validAttempts.length : null,
     averageLatencyMs: latencies.length ? latencies.reduce((sum, value) => sum + value, 0) / latencies.length : null,
     p50LatencyMs: percentile(latencies, 0.5),
     p95LatencyMs: percentile(latencies, 0.95),
@@ -301,6 +306,11 @@ function formatFailureSummary(failures: Record<FailureCategory, number>): string
     .join(', ') || 'none';
 }
 
+function caseAccuracy(aggregate: RegressionAggregate, caseId: string): string {
+  const summary = aggregate.byCase[caseId];
+  return summary ? `${formatPercent(summary.verdictAccuracy)} verdict / ${formatPercent(summary.coverageAccuracy)} KP` : 'not run';
+}
+
 export type RegressionReportMetadata = {
   generatedAt: string;
   promptVersion: string;
@@ -334,13 +344,13 @@ export function renderRegressionReport(
     '',
     '## Configuration comparison',
     '',
-    '| Configuration | Attempts | Valid | Verdict accuracy | KP coverage accuracy | Avg ms | P50 ms | P95 ms | Input tokens | Output tokens | Failures |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+    '| Configuration | Attempts | Valid | Verdict accuracy | Valid verdict accuracy | KP coverage accuracy | Valid KP coverage accuracy | Avg ms | P50 ms | P95 ms | Input tokens | Output tokens | Failures |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
   ];
   for (const configuration of metadata.configurations) {
     const summary = aggregate.byConfiguration[configuration.label];
     if (!summary) continue;
-    lines.push(`| ${configuration.label} | ${summary.total} | ${summary.validResults} | ${formatPercent(summary.verdictAccuracy)} | ${formatPercent(summary.coverageAccuracy)} | ${formatNumber(summary.averageLatencyMs)} | ${formatNumber(summary.p50LatencyMs)} | ${formatNumber(summary.p95LatencyMs)} | ${summary.inputTokens ?? 'N/A'} | ${summary.outputTokens ?? 'N/A'} | ${formatFailureSummary(summary.failures)} |`);
+    lines.push(`| ${configuration.label} | ${summary.total} | ${summary.validResults} | ${formatPercent(summary.verdictAccuracy)} | ${summary.validVerdictAccuracy === null ? 'N/A' : formatPercent(summary.validVerdictAccuracy)} | ${formatPercent(summary.coverageAccuracy)} | ${summary.validCoverageAccuracy === null ? 'N/A' : formatPercent(summary.validCoverageAccuracy)} | ${formatNumber(summary.averageLatencyMs)} | ${formatNumber(summary.p50LatencyMs)} | ${formatNumber(summary.p95LatencyMs)} | ${summary.inputTokens ?? 'N/A'} | ${summary.outputTokens ?? 'N/A'} | ${formatFailureSummary(summary.failures)} |`);
   }
   lines.push(
     '',
@@ -362,7 +372,28 @@ export function renderRegressionReport(
     if (!summary) continue;
     lines.push(`| ${testCase.id} | ${testCase.expected_verdict} | ${testCase.expected_coverage.join(', ') || '—'} | ${formatPercent(summary.verdictAccuracy)} | ${formatPercent(summary.coverageAccuracy)} | ${formatFailureSummary(summary.failures)} |`);
   }
+  const reliableCandidates = metadata.configurations
+    .map((configuration) => ({ configuration, summary: aggregate.byConfiguration[configuration.label] }))
+    .filter(({ summary }) => summary && summary.validResults / summary.total >= 0.9)
+    .sort((left, right) => (right.summary!.validCoverageAccuracy ?? -1) - (left.summary!.validCoverageAccuracy ?? -1));
+  const strongestReliable = reliableCandidates[0];
   lines.push(
+    '',
+    '## Regression checks',
+    '',
+    `- Unknown/unimportant attributes (disability, self-hate, gender): ${caseAccuracy(aggregate, 'disability')}; ${caseAccuracy(aggregate, 'self-hate')}; ${caseAccuracy(aggregate, 'gender')}.`,
+    `- Relevance-direction questions (animal-related, revenge-related): ${caseAccuracy(aggregate, 'animal-related')}; ${caseAccuracy(aggregate, 'revenge-related')}.`,
+    `- Partial/contextual coverage (burning-is-coil, smell-from-coil, hit-mosquito): ${caseAccuracy(aggregate, 'burning-is-coil')}; ${caseAccuracy(aggregate, 'smell-from-coil')}; ${caseAccuracy(aggregate, 'hit-mosquito')}.`,
+    `- Multi-key-point coverage (multi-kp-2-3, full-chain): ${caseAccuracy(aggregate, 'multi-kp-2-3')}; ${caseAccuracy(aggregate, 'full-chain')}.`,
+    `- BOTH cases (mixed-with-KP plus three ambiguity cases): ${caseAccuracy(aggregate, 'both-with-kp')}; ${caseAccuracy(aggregate, 'intentional-self-hit-ambiguous')}; ${caseAccuracy(aggregate, 'hit-self-target-ambiguous')}; ${caseAccuracy(aggregate, 'violent-behavior-ambiguous')}.`,
+    '',
+    '## Recommendation',
+    '',
+    ...(strongestReliable ? [
+      `- On this puzzle, ${strongestReliable.configuration.label} has the strongest valid-result KP coverage accuracy among configurations with at least 90% valid results (${formatPercent(strongestReliable.summary!.validCoverageAccuracy ?? 0)}; valid rate ${formatPercent(strongestReliable.summary!.validResults / strongestReliable.summary!.total)}).`,
+    ] : []),
+    '- Do not route permanently from this single puzzle. The next experiment should use a multi-puzzle gold suite with the same independent verdict/KP metrics.',
+    '- Treat DeepSeek Pro/high as a reliability concern in this run because its invalid-result rate materially reduces usable evidence; do not infer semantic superiority from its valid rows alone.',
     '',
     '## Interpretation',
     '',
