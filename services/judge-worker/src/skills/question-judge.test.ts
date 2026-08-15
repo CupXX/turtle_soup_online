@@ -20,6 +20,9 @@ describe('question judge prompt', () => {
     expect(prompt).toContain('Do not use IRRELEVANT merely because no key point is covered');
     expect(prompt).toContain('Answer relationship questions directly');
     expect(prompt).toContain('every material fact');
+    expect(prompt).toContain('A false factual question about the story subject is NO, not IRRELEVANT');
+    expect(prompt).toContain('这个人死了吗');
+    expect(prompt).toContain('是不是有蚊子');
   });
 
   it('includes only the fixed input and current message', () => {

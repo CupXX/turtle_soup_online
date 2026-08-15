@@ -10,6 +10,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
+    "benchmark:mosquito": "node --env-file=.env.local --import tsx services/judge-worker/benchmarks/mosquito-comparison.ts",
     "verify:first-playable-loop": "node scripts/verify-first-playable-loop.mjs"
   },
   "devDependencies": {

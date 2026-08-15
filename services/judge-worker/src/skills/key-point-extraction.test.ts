@@ -19,6 +19,12 @@ describe('key-point extraction prompt', () => {
     expect(prompt).toContain('Do not invent unsupported details');
     expect(prompt).toContain('Do not mechanically split one semantic fact');
     expect(prompt).toContain('ordered by story chronology');
+    expect(prompt).toContain('Do not create a point merely to explain a surface detail');
+    expect(prompt).toContain('Do not restate an explicit outcome or its immediate consequence');
+    expect(prompt).toContain('If three sufficient points reconstruct the solution, return exactly three');
+    expect(prompt).toContain('Do not use optional slots for post-solution outcomes');
+    expect(prompt).toContain('State only the hidden cause or relationship');
+    expect(prompt).toContain('Do not include a surface time or action merely to contextualize the hidden fact');
   });
 
   it('labels puzzle inputs as untrusted data and excludes conversation state', () => {

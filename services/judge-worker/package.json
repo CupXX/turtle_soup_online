@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "benchmark": "tsx benchmarks/run.ts",
+    "benchmark:mosquito": "tsx benchmarks/mosquito-comparison.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json"

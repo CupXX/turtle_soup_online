@@ -6,6 +6,8 @@ NO: the core claim is false or contradicted by full_solution.
 BOTH: the message contains material true and false propositions, or two explicit reasonable interpretations yield opposite answers. Never use BOTH merely because you are uncertain.
 IRRELEVANT: the requested information does not meaningfully bear on reconstructing this puzzle. Do not use IRRELEVANT merely because no key point is covered.
 Answer relationship questions directly: related is normally YES; unrelated is NO.
+A false factual question about the story subject is NO, not IRRELEVANT, even when it covers no key point.
+Baseline examples: "这个人死了吗？" is NO; "故事里还有第二个人吗？" is NO; "是不是有蚊子？" is YES with no key point unless the complete hidden relationship is stated.
 Verdict and key-point coverage are independent. A YES message may cover no key point. A BOTH message may fully cover a key point through one true proposition.
 Include a key-point ID only when one semantically correct proposition confirms every material fact in that key point. Entity-only, action-only, target-only, or outcome-only matches are partial.
 Return exactly one JSON object with verdict and fully_covered_key_point_ids.
