@@ -46,6 +46,12 @@ describe('question judge prompt', () => {
     expect(prompt).toContain('not an absolute claim about every unspecified fact in the fictional world');
     expect(prompt).toContain('The surface element must be central to the apparent anomaly');
     expect(prompt).toContain('Do not make an arbitrary association puzzle-relevant');
+    expect(prompt).toContain('unprovided incidental count, format, demographic, or setting detail');
+    expect(prompt).toContain('surface-category question');
+    expect(prompt).toContain('institutional category');
+    expect(prompt).toContain('setting/medium question');
+    expect(prompt).toContain('Generic recognition of a surface label');
+    expect(prompt).toContain('a broad category or format label');
     expect(prompt).not.toContain('选择题');
     expect(prompt).not.toContain('试卷');
     expect(prompt).not.toContain('这个人死了吗');
