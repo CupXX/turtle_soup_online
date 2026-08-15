@@ -29,16 +29,13 @@ export const FIXED_KEY_POINTS = [
 ] as const;
 
 export const MODEL_CONFIGURATIONS = [
-  { label: 'DeepSeek Flash / off', provider: 'deepseek', model: 'deepseek-v4-flash', reasoningEffort: 'off' as const },
-  { label: 'DeepSeek Flash / high', provider: 'deepseek', model: 'deepseek-v4-flash', reasoningEffort: 'high' as const },
-  { label: 'DeepSeek Pro / off', provider: 'deepseek', model: 'deepseek-v4-pro', reasoningEffort: 'off' as const },
-  { label: 'DeepSeek Pro / high', provider: 'deepseek', model: 'deepseek-v4-pro', reasoningEffort: 'high' as const },
   { label: 'GPT-5.6 Luna / none', provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'none' as const },
   { label: 'GPT-5.6 Luna / medium', provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'medium' as const },
+  { label: 'DeepSeek Pro / off', provider: 'deepseek', model: 'deepseek-v4-pro', reasoningEffort: 'off' as const },
 ] as const;
 
-export const FORMAL_REPORT_PATH = resolve(process.cwd(), 'docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.md');
-export const FORMAL_RESULTS_PATH = resolve(process.cwd(), 'docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.results.json');
+export const FORMAL_REPORT_PATH = resolve(process.cwd(), 'docs/reports/2026-08-15-mosquito-question-judge-v4-25case-3config-5round.md');
+export const FORMAL_RESULTS_PATH = resolve(process.cwd(), 'docs/reports/2026-08-15-mosquito-question-judge-v4-25case-3config-5round.results.json');
 
 export type LiveBenchmarkOptions = {
   rounds: number;

@@ -328,7 +328,7 @@ export function renderRegressionReport(
 ): string {
   const aggregate = summarizeAttempts(attempts);
   const lines: string[] = [
-    '# Mosquito Question Judge v4 — 25-case, 6-configuration, 5-round comparison',
+    `# Mosquito Question Judge v4 — 25-case, ${metadata.configurations.length}-configuration, 5-round comparison`,
     '',
     `- Generated: ${metadata.generatedAt}`,
     `- Fixture: ${metadata.fixturePath}`,
@@ -393,7 +393,7 @@ export function renderRegressionReport(
       `- On this puzzle, ${strongestReliable.configuration.label} has the strongest valid-result KP coverage accuracy among configurations with at least 90% valid results (${formatPercent(strongestReliable.summary!.validCoverageAccuracy ?? 0)}; valid rate ${formatPercent(strongestReliable.summary!.validResults / strongestReliable.summary!.total)}).`,
     ] : []),
     '- Do not route permanently from this single puzzle. The next experiment should use a multi-puzzle gold suite with the same independent verdict/KP metrics.',
-    '- Treat DeepSeek Pro/high as a reliability concern in this run because its invalid-result rate materially reduces usable evidence; do not infer semantic superiority from its valid rows alone.',
+    '- Treat configuration-specific transport and schema failures as reliability observations; do not infer semantic superiority from valid rows alone.',
     '',
     '## Interpretation',
     '',

@@ -44,7 +44,7 @@ describe('createSemanticJudge', () => {
       provider: 'deepseek-harness',
       model: 'question-model',
       reasoningEffort: 'off',
-      promptVersion: 'question-judge-v3',
+      promptVersion: 'question-judge-v4',
       schemaVersion: 'judge-schema-v1',
     });
   });

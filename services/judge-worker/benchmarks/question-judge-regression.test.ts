@@ -101,7 +101,7 @@ describe('question judge 25-case fixture', () => {
     expect(aggregate.byConfiguration['Test / none'].p95LatencyMs).toBe(12);
     const metadata = {
       generatedAt: '2026-08-15T00:00:00.000Z',
-      promptVersion: 'question-judge-v3',
+      promptVersion: 'question-judge-v4',
       schemaVersion: 'question-judge-v1',
       rounds: 1,
       configurations: [{ label: 'Test / none', provider: 'test', model: 'test-model', reasoningEffort: 'none' }],

@@ -18,7 +18,7 @@ describe('live question judge benchmark runner', () => {
     });
   });
 
-  it('runs all six configurations sequentially over 25 cases for five rounds', async () => {
+  it('runs all three configurations sequentially over 25 cases for five rounds', async () => {
     const fixture = await loadQuestionJudgeFixture();
     const calls: Array<{ label: string; input: QuestionJudgeInput }> = [];
     const factory = vi.fn((configuration: (typeof MODEL_CONFIGURATIONS)[number]) => ({
@@ -34,12 +34,12 @@ describe('live question judge benchmark runner', () => {
       judgeFactory: factory,
       log: () => undefined,
     });
-    expect(result.attempts).toHaveLength(750);
-    expect(factory).toHaveBeenCalledTimes(6);
-    expect(calls).toHaveLength(750);
-    expect(calls[0]?.label).toBe('DeepSeek Flash / off');
-    expect(calls[125]?.label).toBe('DeepSeek Flash / high');
-    expect(calls[500]?.label).toBe('GPT-5.6 Luna / none');
+    expect(result.attempts).toHaveLength(375);
+    expect(factory).toHaveBeenCalledTimes(3);
+    expect(calls).toHaveLength(375);
+    expect(calls[0]?.label).toBe('GPT-5.6 Luna / none');
+    expect(calls[125]?.label).toBe('GPT-5.6 Luna / medium');
+    expect(calls[250]?.label).toBe('DeepSeek Pro / off');
     expect(calls.every(({ input }) => Object.keys(input).sort().join('|') === 'current_message|full_solution|key_points|puzzle_surface')).toBe(true);
     expect(calls.every(({ input }) => JSON.stringify(input.key_points) === JSON.stringify(FIXED_KEY_POINTS.map(({ id, content }) => ({ id, content }))))).toBe(true);
     expect(result.attempts.every(({ verdictCorrect, coverageCorrect, schemaValid }) => verdictCorrect && coverageCorrect && schemaValid)).toBe(true);
@@ -63,9 +63,9 @@ describe('live question judge benchmark runner', () => {
       writeFile,
       log: () => undefined,
     });
-    expect(result.attempts).toHaveLength(12);
+    expect(result.attempts).toHaveLength(6);
     expect(result.attempts.filter(({ errorCode }) => errorCode === 'TRANSPORT_ERROR')).toHaveLength(1);
-    expect(calls).toBe(12);
+    expect(calls).toBe(6);
     expect(writeFile).not.toHaveBeenCalled();
   });
 });
