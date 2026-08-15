@@ -5,6 +5,7 @@
   "scripts": {
     "benchmark": "tsx benchmarks/run.ts",
     "benchmark:mosquito": "tsx benchmarks/mosquito-comparison.ts",
+    "benchmark:mosquito:25": "tsx benchmarks/mosquito-question-judge-live.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json"

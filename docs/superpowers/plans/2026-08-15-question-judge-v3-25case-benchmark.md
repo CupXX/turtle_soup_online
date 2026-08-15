@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the contaminated mosquito-specific Question Judge examples with a generic v3 semantic policy, freeze the approved 25-case gold fixture, and compare Flash, Pro, and Pro + thinking over five identical rounds without changing the prompt after the formal run starts.
+**Goal:** Replace the contaminated mosquito-specific Question Judge examples with a generic v3 semantic policy, freeze the approved 25-case gold fixture, and compare DeepSeek Flash/Pro plus GPT-5.6 Luna across truthful reasoning settings over five identical rounds without changing the prompt after the formal run starts.
 
-**Architecture:** Keep the existing `QuestionJudgeInput`, `QuestionJudgeResult`, `HarnessSemanticJudge`, strict schema, and per-skill model routing. Add one fixed fixture, a pure regression/scoring module, and a thin sequential live runner; the Question Judge benchmark uses the fixture's three fixed key points and never calls key-point extraction. Generate one concise Markdown report plus one machine-readable result file so all 375 attempts remain auditable without storing chain-of-thought or API credentials.
+**Architecture:** Keep the existing `QuestionJudgeInput`, `QuestionJudgeResult`, `HarnessSemanticJudge`, strict schema contract, and per-skill model routing. DeepSeek configurations continue through the existing Harness; OpenAI's `none` and `medium` configurations use a small Responses API adapter that reuses the exact production prompt and result validator because the installed Harness seam cannot express OpenAI's `none` level. The OpenAI wire schema is a provider-compatible projection of `QUESTION_JUDGE_SCHEMA` (it removes only the unsupported `uniqueItems` keyword); the shared validator still enforces uniqueness after every response. Add one fixed fixture, a pure regression/scoring module, and a thin sequential live runner; the Question Judge benchmark uses the fixture's three fixed key points and never calls key-point extraction. Generate one concise Markdown report plus one machine-readable result file so all 750 attempts remain auditable without storing chain-of-thought or API credentials.
 
 **Tech Stack:** TypeScript 7, Node.js 22, pnpm 10, DeepSeek Harness `0.1.0-rc.6`, Vitest, JSON fixtures, Markdown reports.
 
@@ -20,9 +20,13 @@
 - The production prompt must contain generic policy only. It must not contain exact fixture questions, case IDs, mosquito-specific answers, or keyword exceptions.
 - All model configurations use the same production prompt, input boundary, fixed key points, and `QUESTION_JUDGE_SCHEMA`.
 - The Question Judge receives only `puzzle_surface`, `full_solution`, `key_points`, and `current_message`.
+- DeepSeek V4 `medium` is not an independent wire setting: the official API maps `low` and `medium` to `high`. Benchmark labels therefore use the truthful `high` name for DeepSeek thinking runs.
+- OpenAI GPT-5.6 Luna uses the official model ID `gpt-5.6-luna`; its `none` and `medium` settings are sent through the OpenAI Responses API and remain separate configurations.
+- OpenAI strict structured outputs reject JSON Schema `uniqueItems`; the benchmark removes that one wire-level keyword and relies on the shared post-response validator for uniqueness.
+- DeepSeek calls use `JUDGE_API_BASE_URL`/`JUDGE_API_KEY`; OpenAI calls use `OPENAI_API_BASE_URL` (default `https://api.openai.com/v1`) and `OPENAI_API_KEY`. Secrets are local-only and never committed.
 - Do not modify `QUESTION_JUDGE_SCHEMA`, `validateQuestionResult`, or production scoring unless a targeted test proves an actual parser/schema defect. None is currently known.
-- Formal comparison configurations are exactly: Flash/off, Pro/off, and Pro/high thinking.
-- Formal comparison is exactly five rounds: `25 cases × 3 configurations × 5 rounds = 375 attempts`.
+- Formal comparison configurations are exactly: DeepSeek Flash/off, DeepSeek Flash/high, DeepSeek Pro/off, DeepSeek Pro/high, GPT-5.6 Luna/none, and GPT-5.6 Luna/medium.
+- Formal comparison is exactly five rounds: `25 cases × 6 configurations × 5 rounds = 750 attempts`.
 - Execute attempts sequentially and do not add benchmark-level retries. Transport/schema failures are measured results, not hidden by retries.
 - Token usage and cost remain `N/A` unless the current Harness/provider returns authoritative values. Never estimate them.
 - Calibration may change v3 policy before freeze. After the formal run begins, do not change prompt, fixture, schema, runner, or expectations and overwrite the report.
@@ -84,15 +88,17 @@ Verdict distribution: YES 13, NO 5, BOTH 4, IRRELEVANT 3.
 
 ### Live experiment boundary
 
-- `services/judge-worker/benchmarks/mosquito-question-judge-live.ts`: sequential live orchestration using fixed KP UUIDs and the three existing model configurations; no extraction call and no benchmark retry.
-- `services/judge-worker/benchmarks/mosquito-question-judge-live.test.ts`: fake-judge orchestration tests for filters, rounds, row counts, and error recording.
+- `services/judge-worker/benchmarks/openai-responses-semantic-judge.ts`: small OpenAI Responses adapter that sends the existing production prompt/schema and returns validated Question Judge results, including usage metadata when available.
+- `services/judge-worker/benchmarks/openai-responses-semantic-judge.test.ts`: mocked Responses API tests for `none`, `medium`, strict JSON parsing, schema rejection, usage capture, and error mapping.
+- `services/judge-worker/benchmarks/mosquito-question-judge-live.ts`: sequential live orchestration using fixed KP UUIDs and six model/reasoning configurations; no extraction call and no benchmark retry.
+- `services/judge-worker/benchmarks/mosquito-question-judge-live.test.ts`: fake-judge orchestration tests for filters, rounds, six-config row counts, provider selection, and error recording.
 - `services/judge-worker/package.json`: add `benchmark:mosquito:25`.
 - `package.json`: add the root `.env.local` wrapper for `benchmark:mosquito:25`.
 
 ### Generated evidence
 
-- `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.md`: frozen-run summary, per-case stability, BOTH accuracy, failures, regression checks, and recommendation.
-- `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.results.json`: all 375 structured attempts without API key, prompt text, raw output, or reasoning.
+- `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.md`: frozen-run summary, per-case stability, BOTH accuracy, failures, regression checks, provider/setting comparison, and recommendation.
+- `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.results.json`: all 750 structured attempts without API key, prompt text, raw output, or reasoning.
 
 ---
 
@@ -486,7 +492,70 @@ Expected: pure tests and Worker typecheck pass without calling a model.
 
 ---
 
-### Task 4: Add the sequential live 25-case runner
+### Task 4: Add the OpenAI Responses Question Judge adapter
+
+**Files:**
+- Create: `services/judge-worker/benchmarks/openai-responses-semantic-judge.ts`
+- Test: `services/judge-worker/benchmarks/openai-responses-semantic-judge.test.ts`
+
+**Interfaces:**
+- Consumes: `QuestionJudgeInput`, `QuestionJudgeResult`, `buildQuestionJudgePrompt`, `QUESTION_JUDGE_SCHEMA`, and `validateQuestionResult`.
+- Produces: `OpenAIResponsesSemanticJudge`, `OpenAIReasoningEffort`, and a `judgeQuestion(input)` method returning the same validated result as `HarnessSemanticJudge` plus optional provider usage metadata.
+
+- [ ] **Step 1: Write failing adapter tests with a mocked fetch**
+
+Use a local `vi.stubGlobal('fetch', ...)` response fixture and assert the request body contains the same production prompt and JSON schema as the Harness path. Add tests for:
+
+```ts
+expect(request.body.model).toBe('gpt-5.6-luna');
+expect(request.body.reasoning).toEqual({ effort: 'none' });
+expect(request.body.text.format.type).toBe('json_schema');
+expect(request.body.text.format.strict).toBe(true);
+```
+
+Repeat with `reasoning: { effort: 'medium' }`. Return a minimal Responses payload with one `output_text` JSON object and usage fields, then assert verdict, coverage, latency-independent usage capture, and exact schema validation. Add tests that malformed JSON and invalid verdicts become the same stable validation errors used by `HarnessSemanticJudge`, and non-2xx responses become `TRANSPORT_ERROR` without retry.
+
+- [ ] **Step 2: Run the adapter suite and verify RED**
+
+```powershell
+pnpm --filter @turtle-soup/judge-worker test -- benchmarks/openai-responses-semantic-judge.test.ts
+```
+
+Expected: FAIL because the adapter and request builder do not exist.
+
+- [ ] **Step 3: Implement the minimal Responses adapter**
+
+Implement one request per `judgeQuestion` call with native `fetch`:
+
+```ts
+type OpenAIReasoningEffort = 'none' | 'medium';
+
+type OpenAIResponsesSemanticJudgeOptions = {
+  apiBaseUrl: string;
+  apiKey: string;
+  model: 'gpt-5.6-luna';
+  reasoningEffort: OpenAIReasoningEffort;
+  timeoutMs: number;
+};
+```
+
+POST to `${apiBaseUrl}/responses` with the production prompt as the user input, `model`, `reasoning: { effort: reasoningEffort }`, and strict JSON schema output named `question_judge`. Project the shared schema only to remove the unsupported `uniqueItems` keyword, then read only the final text output, parse exactly one JSON value, call `validateQuestionResult(raw, input.key_points.map(({ id }) => id))`, and return `{ result, inputTokens, outputTokens, costUsd: null }`. Abort at `timeoutMs`, map non-2xx/abort/invalid response to stable error codes, and never log the key, prompt, raw response, or reasoning content. Keep the adapter benchmark-only; do not change production routing or the database audit schema.
+
+- [ ] **Step 4: Run focused tests and commit the adapter**
+
+```powershell
+pnpm --filter @turtle-soup/judge-worker test -- benchmarks/openai-responses-semantic-judge.test.ts
+pnpm --filter @turtle-soup/judge-worker typecheck
+git add -- services/judge-worker/benchmarks/openai-responses-semantic-judge.ts services/judge-worker/benchmarks/openai-responses-semantic-judge.test.ts
+git diff --cached --check
+git commit -m "feat: add openai judge benchmark adapter"
+```
+
+Expected: mocked adapter tests pass, no live API call occurs, and exactly the two adapter files are committed.
+
+---
+
+### Task 5: Add the sequential live 25-case runner
 
 **Files:**
 - Create: `services/judge-worker/benchmarks/mosquito-question-judge-live.ts`
@@ -495,7 +564,7 @@ Expected: pure tests and Worker typecheck pass without calling a model.
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: fixed fixture, pure evaluation/report functions, `HarnessSemanticJudge`, `createHarnessInvoker`, `QUESTION_JUDGE_PROMPT_VERSION`, and unchanged `QUESTION_JUDGE_SCHEMA`.
+- Consumes: fixed fixture, pure evaluation/report functions, `HarnessSemanticJudge`, `createHarnessInvoker`, `OpenAIResponsesSemanticJudge`, `QUESTION_JUDGE_PROMPT_VERSION`, and unchanged `QUESTION_JUDGE_SCHEMA`.
 - Produces: `parseLiveBenchmarkArgs(argv)`, `runQuestionJudgeRegression(options, dependencies)`, CLI command `pnpm benchmark:mosquito:25 -- --rounds 5`, Markdown report, and JSON results.
 
 - [ ] **Step 1: Write failing orchestration tests with fake judges**
@@ -522,8 +591,9 @@ expect(parseLiveBenchmarkArgs([
 
 Inject a fake `judgeFactory(configuration)` and assert:
 
-- 25 cases × 3 configurations × 5 rounds returns exactly 375 attempts;
-- every call receives the same three fixed UUID/content pairs;
+- 25 cases × 6 configurations × 5 rounds returns exactly 750 attempts;
+- every call receives the same three fixed UUID/content pairs and the same four input fields;
+- DeepSeek configurations use the existing Harness; Luna configurations use the OpenAI adapter with `none` and `medium` in the request body;
 - `extractKeyPoints` is never required or called;
 - calls occur sequentially;
 - one thrown `TRANSPORT_ERROR` creates one failed attempt and does not retry;
@@ -550,13 +620,16 @@ const FIXED_KEY_POINTS = [
 ];
 
 const MODEL_CONFIGURATIONS = [
-  { label: 'Flash', model: 'deepseek-v4-flash', reasoningEffort: 'off' as const },
-  { label: 'Pro', model: 'deepseek-v4-pro', reasoningEffort: 'off' as const },
-  { label: 'Pro + thinking', model: 'deepseek-v4-pro', reasoningEffort: 'high' as const },
+  { label: 'DeepSeek Flash / off', provider: 'deepseek', model: 'deepseek-v4-flash', reasoningEffort: 'off' as const },
+  { label: 'DeepSeek Flash / high', provider: 'deepseek', model: 'deepseek-v4-flash', reasoningEffort: 'high' as const },
+  { label: 'DeepSeek Pro / off', provider: 'deepseek', model: 'deepseek-v4-pro', reasoningEffort: 'off' as const },
+  { label: 'DeepSeek Pro / high', provider: 'deepseek', model: 'deepseek-v4-pro', reasoningEffort: 'high' as const },
+  { label: 'GPT-5.6 Luna / none', provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'none' as const },
+  { label: 'GPT-5.6 Luna / medium', provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'medium' as const },
 ];
 ```
 
-Map the fixture's KP labels to UUIDs before each call and map actual UUIDs back to labels before scoring/reporting. Build every call with the fixture's unchanged puzzle surface, full solution, fixed key-point content, and one current question.
+Map the fixture's KP labels to UUIDs before each call and map actual UUIDs back to labels before scoring/reporting. Build every call with the fixture's unchanged puzzle surface, full solution, fixed key-point content, and one current question. Select the DeepSeek Harness factory for `provider: 'deepseek'` and the OpenAI adapter factory for `provider: 'openai'`; do not silently fall back between providers.
 
 - [ ] **Step 4: Implement sequential execution and truthful error recording**
 
@@ -575,7 +648,7 @@ for (const configuration of MODEL_CONFIGURATIONS) {
 
 Do not use `Promise.all`, concurrency, extraction, or retries. Print one compact progress line containing model label, round, case ID, validity, and latency; never print prompt, solution, key, or raw output. At the end, print a compact comparison table containing expected/actual verdict, expected/actual coverage, and failure categories. This table is required even with `--no-write`, so calibration decisions remain evidence-based without creating report files.
 
-Write reports only after `attempts.length === selectedCases.length × 3 × rounds`. The formal paths are the two files listed in the File Map.
+Write reports only after `attempts.length === selectedCases.length × 6 × rounds`. The formal paths are the two files listed in the File Map. Include provider, model, reasoning setting, and optional usage fields in every attempt; never include API keys, full solution, prompt text, raw output, or reasoning content.
 
 - [ ] **Step 5: Add package scripts**
 
@@ -617,7 +690,7 @@ Expected: exactly the runner, its test, and two package manifests are committed.
 
 ---
 
-### Task 5: Calibrate policy boundaries, then freeze the implementation
+### Task 6: Calibrate policy boundaries, then freeze the implementation
 
 **Files:**
 - Modify only if calibration proves a shared policy defect: `services/judge-worker/src/skills/question-judge.ts`
@@ -626,7 +699,7 @@ Expected: exactly the runner, its test, and two package manifests are committed.
 
 **Interfaces:**
 - Consumes: committed v3 prompt, fixed fixture, real Harness credentials from root `.env.local`, and selected policy-boundary cases.
-- Produces: one committed, test-covered frozen prompt revision before the formal 375-call run.
+- Produces: one committed, test-covered frozen prompt revision before the formal 750-call run.
 
 - [ ] **Step 1: Run one non-reporting calibration round**
 
@@ -634,14 +707,14 @@ Expected: exactly the runner, its test, and two package manifests are committed.
 pnpm benchmark:mosquito:25 -- --rounds 1 --cases disability,self-hate-cause,intentional-burning,burning-is-coil,smell-from-coil,both-with-kp,hit-self-target-ambiguous,violent-behavior-ambiguous --no-write
 ```
 
-Expected: 24 attempts, eight cases for each of the three configurations, with no report files changed.
+Expected: 48 attempts, eight cases for each of the six configurations, with no report files changed. The printed calibration table must show both OpenAI reasoning bodies (`none` and `medium`) and all four DeepSeek provider/model/setting labels.
 
 - [ ] **Step 2: Classify calibration failures before editing**
 
 Use these decision rules:
 
-- Shared wrong verdict across all three configurations on the same policy tag: candidate prompt-policy defect.
-- One configuration fails while the others pass: configuration/model sensitivity; do not change the shared prompt solely for that result.
+- Shared wrong verdict across all six configurations on the same policy tag: candidate prompt-policy defect.
+- One provider/model/reasoning configuration fails while the others pass: configuration/model sensitivity; do not change the shared prompt solely for that result.
 - `SCHEMA_INVALID`, `INVALID_JSON`, `TRANSPORT_ERROR`, or `TIMEOUT`: runtime reliability issue; do not rewrite semantic policy to hide it.
 - Wrong coverage on both `burning-is-coil` and `smell-from-coil`: refine only the generic contextual-entailment/source-only distinction; do not add either Chinese question to the prompt.
 - BOTH failure on the two ambiguity cases: refine only natural/material ambiguity and definition-boundary wording; do not add case-specific keywords.
@@ -660,6 +733,8 @@ pnpm --filter @turtle-soup/judge-worker typecheck
 - [ ] **Step 4: Re-run only the same calibration set**
 
 Use the exact command from Step 1. Stop calibration when shared policy failures are resolved or when remaining failures are configuration-specific. Do not tune for perfect results from one model.
+
+Calibration evidence for the frozen v3 wording: the first run showed shared under-coverage of the contextual KP3 case and unstable material-ambiguity BOTH handling; the generic context/ambiguity wording was then corrected and the same eight-case set was rerun. The second run resolved KP3 coverage for Luna/medium and Pro/off, while remaining misses were configuration-specific (especially DeepSeek high latency/transport and ambiguity handling); no further shared prompt change is justified before the formal run.
 
 - [ ] **Step 5: Freeze and commit any calibration change**
 
@@ -683,15 +758,15 @@ Expected: both diff commands succeed. `git status --short` may list only the thr
 
 ---
 
-### Task 6: Run the frozen five-round model comparison
+### Task 7: Run the frozen five-round model comparison
 
 **Files:**
-- Create: `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.md`
-- Create: `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.results.json`
+- Create: `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.md`
+- Create: `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.results.json`
 
 **Interfaces:**
-- Consumes: frozen commit, root `.env.local`, fixed fixture, three model configurations, five rounds.
-- Produces: exactly 375 immutable structured attempts and one concise analysis report.
+- Consumes: frozen commit, root `.env.local`, fixed fixture, six model/reasoning configurations, five rounds.
+- Produces: exactly 750 immutable structured attempts and one concise analysis report.
 
 - [ ] **Step 1: Run the formal experiment once**
 
@@ -701,10 +776,10 @@ pnpm benchmark:mosquito:25 -- --rounds 5
 
 Expected structural totals:
 
-- 375 attempts overall;
+- 750 attempts overall;
 - 125 attempts per configuration;
 - 5 attempts per case per configuration;
-- 15 attempts per case across all configurations;
+- 30 attempts per case across all configurations;
 - 20 expected BOTH attempts per configuration;
 - report and results files written only after all attempts finish.
 
@@ -716,10 +791,10 @@ Check:
 
 ```powershell
 pnpm --filter @turtle-soup/judge-worker test -- benchmarks/question-judge-regression.test.ts benchmarks/mosquito-question-judge-live.test.ts
-Select-String -Path docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.md -Pattern 'JUDGE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY'
+Select-String -Path docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.md -Pattern 'JUDGE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY'
 ```
 
-Expected: tests pass and the secret-name scan returns no matches. Inspect the JSON count with a read-only command and verify `attempts.length === 375`.
+Expected: tests pass and the secret-name scan returns no matches. Inspect the JSON count with a read-only command and verify `attempts.length === 750`; verify both OpenAI configurations carry the expected reasoning setting and the four DeepSeek configurations carry the expected model/setting.
 
 - [ ] **Step 3: Do not edit prompt or gold expectations after results**
 
@@ -728,7 +803,7 @@ Failures remain in this report. Any later policy change must use a new prompt ve
 - [ ] **Step 4: Commit the immutable experiment evidence**
 
 ```powershell
-git add -- docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.md docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.results.json
+git add -- docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.md docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.results.json
 git diff --cached --name-only
 git diff --cached --check
 git commit -m "docs: report 25 case judge comparison"
@@ -738,12 +813,12 @@ Expected staged files: exactly the Markdown report and JSON results.
 
 ---
 
-### Task 7: Verify regressions and make a routing recommendation
+### Task 8: Verify regressions and make a routing recommendation
 
 **Files:**
 - Modify only if the generated report omitted a required computed section: `services/judge-worker/benchmarks/question-judge-regression.ts`
 - Test every report correction: `services/judge-worker/benchmarks/question-judge-regression.test.ts`
-- Regenerate without new model calls only from the committed `.results.json`: `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.md`
+- Regenerate without new model calls only from the committed `.results.json`: `docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.md`
 
 **Interfaces:**
 - Consumes: frozen results, previous 8-case report, Worker verification suite.
@@ -791,7 +866,7 @@ The recommendation should follow this order:
 If no deterministic report correction was required, skip this commit. If required:
 
 ```powershell
-git add -- services/judge-worker/benchmarks/question-judge-regression.ts services/judge-worker/benchmarks/question-judge-regression.test.ts docs/reports/2026-08-15-mosquito-question-judge-v4-25case-5round.md
+git add -- services/judge-worker/benchmarks/question-judge-regression.ts services/judge-worker/benchmarks/question-judge-regression.test.ts docs/reports/2026-08-15-mosquito-question-judge-v4-25case-6config-5round.md
 git diff --cached --check
 git commit -m "fix: complete judge regression reporting"
 ```
@@ -810,7 +885,7 @@ Do not rerun model calls for a Markdown formatting or computed-summary correctio
 - [ ] Calibration is explicitly pre-freeze, formal run is exactly five rounds, and formal results are never overwritten after prompt changes.
 - [ ] Each model gets the same 25 inputs, fixed KPs, prompt, schema, and number of rounds.
 - [ ] Runtime/schema failures remain visible and benchmark-level retries cannot hide them.
-- [ ] Markdown is concise while the JSON results retain all 375 attempts.
+- [ ] Markdown is concise while the JSON results retain all 750 attempts.
 - [ ] Token/cost remains N/A unless authoritative provider usage becomes available.
 - [ ] The old 8-case benchmark is preserved and described as contaminated by three exact prompt examples.
 - [ ] No task changes the live game, database schema, Docker configuration, key-point extraction route, final-answer judge, or unrelated UI.
