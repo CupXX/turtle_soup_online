@@ -1,6 +1,6 @@
 import type { QuestionJudgeInput } from '@turtle-soup/contracts';
 
-export const QUESTION_JUDGE_PROMPT_VERSION = 'question-judge-v5';
+export const QUESTION_JUDGE_PROMPT_VERSION = 'question-judge-v6';
 
 export function buildQuestionJudgePrompt(input: QuestionJudgeInput): string {
   return [
@@ -28,6 +28,13 @@ export function buildQuestionJudgePrompt(input: QuestionJudgeInput): string {
     'PHASE B - EVALUATE',
     'Evaluate each material proposition or natural interpretation separately as TRUE, FALSE, or INCIDENTAL/UNSPECIFIED.',
     'For an explicit relevance-direction proposition, evaluate the relationship itself: materially related is TRUE and materially unrelated is FALSE. Do not label the relationship INCIDENTAL merely because its subject is unrelated.',
+    'A current message may be puzzle-relevant when it proposes a direct, ordinary, and contextually immediate framing or interpretation of a salient surface element.',
+    'This includes a message that tests a natural real-world meaning of that salient surface element even when it does not explicitly state a causal relation.',
+    'When that framing is a normal competing reading of the surface wording, evaluate that proposed framing as TRUE or FALSE against the canonical causal story.',
+    'If the framing conflicts with the canonical solution, evaluate it as FALSE, so the final verdict is normally NO rather than IRRELEVANT.',
+    'The surface element must be central to the apparent anomaly, and the proposed framing must be direct, ordinary, and strongly suggested by the wording in context.',
+    'Do not make an arbitrary association puzzle-relevant merely because a hypothetical connection can be imagined.',
+    'NO means that a puzzle-relevant direction is wrong; it is not an absolute claim about every unspecified fact in the fictional world.',
     'A standalone state, motive, or attribute may be puzzle-relevant when, in the immediate context of a salient or abnormal surface event, it functions as a direct and ordinary competing explanation for that event.',
     'If that explanatory direction conflicts with the canonical solution, evaluate it as FALSE.',
     'The connection must be direct, ordinary, and strongly suggested by the specific surface event. Do not make an attribute relevant merely because some hypothetical causal connection can be imagined.',
