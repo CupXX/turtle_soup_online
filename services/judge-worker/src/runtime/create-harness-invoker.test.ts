@@ -38,7 +38,7 @@ const config = {
   model: 'deepseek-v4-flash',
   apiBaseUrl: 'http://127.0.0.1:1',
   apiKey: 'test-key',
-  timeoutMs: 10_000,
+  timeoutMs: 30_000,
   workerId: 'worker-1',
   buildVersion: 'test-build',
 };
@@ -73,13 +73,29 @@ describe('createHarnessInvoker', () => {
       skill: 'question-judge',
       prompt: 'judge this question',
       schema: { type: 'object' },
-      timeoutMs: 10_000,
+      timeoutMs: 30_000,
     })).resolves.toEqual({ verdict: 'YES' });
 
     expect(mock.requests).toHaveLength(1);
     expect(mock.requests[0].tools ?? []).toEqual([]);
+    expect(mock.requests[0].thinking).toEqual({ type: 'disabled' });
+    expect(mock.requests[0].model).toBe('deepseek-v4-flash');
     await expect(stat(homes[0])).rejects.toThrow();
-  });
+  }, 40_000);
+
+  it('applies the selected reasoning overlay and model independently', async () => {
+    const mock = await provider({ verdict: 'YES' });
+    const highInvoker = createHarnessInvoker({ ...config, apiBaseUrl: mock.url, model: 'deepseek-v4-pro', reasoningEffort: 'high' });
+    const maxInvoker = createHarnessInvoker({ ...config, apiBaseUrl: mock.url, model: 'deepseek-v4-pro', reasoningEffort: 'max' });
+
+    await highInvoker({ skill: 'question-judge', prompt: 'high', schema: { type: 'object' }, timeoutMs: 30_000 });
+    await maxInvoker({ skill: 'question-judge', prompt: 'max', schema: { type: 'object' }, timeoutMs: 30_000 });
+
+    expect(mock.requests[0].model).toBe('deepseek-v4-pro');
+    expect(mock.requests[0].reasoning_effort).toBe('high');
+    expect(mock.requests[1].model).toBe('deepseek-v4-pro');
+    expect(mock.requests[1].reasoning_effort).toBe('max');
+  }, 90_000);
 
   it('kills a hung Harness process and maps the timeout', async () => {
     const mock = await provider({ verdict: 'YES' }, 2_000);

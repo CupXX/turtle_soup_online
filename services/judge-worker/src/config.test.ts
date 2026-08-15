@@ -17,12 +17,32 @@ describe('worker configuration', () => {
     expect(loadWorkerConfig(validEnv)).toEqual({
       databaseUrl: validEnv.JUDGE_WORKER_DATABASE_URL,
       provider: validEnv.JUDGE_PROVIDER,
-      model: validEnv.JUDGE_MODEL,
       apiBaseUrl: validEnv.JUDGE_API_BASE_URL,
       apiKey: validEnv.JUDGE_API_KEY,
       timeoutMs: 30000,
       workerId: validEnv.WORKER_ID,
       buildVersion: validEnv.BUILD_VERSION,
+      skillConfigs: {
+        'key-point-extraction': { model: validEnv.JUDGE_MODEL, reasoningEffort: 'off' },
+        'question-judge': { model: validEnv.JUDGE_MODEL, reasoningEffort: 'off' },
+        'final-answer-judge': { model: validEnv.JUDGE_MODEL, reasoningEffort: 'off' },
+      },
+    });
+  });
+
+  it('allows each semantic skill to select its own model and reasoning effort', () => {
+    expect(loadWorkerConfig({
+      ...validEnv,
+      JUDGE_KEY_POINT_EXTRACTION_MODEL: 'deepseek-v4-pro',
+      JUDGE_KEY_POINT_EXTRACTION_REASONING_EFFORT: 'high',
+      JUDGE_QUESTION_MODEL: 'deepseek-v4-pro',
+      JUDGE_QUESTION_REASONING_EFFORT: 'off',
+      JUDGE_FINAL_ANSWER_MODEL: 'deepseek-v4-flash',
+      JUDGE_FINAL_ANSWER_REASONING_EFFORT: 'max',
+    }).skillConfigs).toEqual({
+      'key-point-extraction': { model: 'deepseek-v4-pro', reasoningEffort: 'high' },
+      'question-judge': { model: 'deepseek-v4-pro', reasoningEffort: 'off' },
+      'final-answer-judge': { model: 'deepseek-v4-flash', reasoningEffort: 'max' },
     });
   });
 
@@ -32,5 +52,6 @@ describe('worker configuration', () => {
     expect(() => loadWorkerConfig(missing)).toThrow(/JUDGE_API_KEY/);
 
     expect(() => loadWorkerConfig({ ...validEnv, JUDGE_TIMEOUT_MS: '0' })).toThrow(/JUDGE_TIMEOUT_MS/);
+    expect(() => loadWorkerConfig({ ...validEnv, JUDGE_QUESTION_REASONING_EFFORT: 'medium' })).toThrow(/JUDGE_QUESTION_REASONING_EFFORT/);
   });
 });

@@ -1,19 +1,37 @@
+import type { HarnessSkill } from './runtime/semantic-judge.js';
+
 export type WorkerEnvironment = Record<string, string | undefined>;
+
+export type ReasoningEffort = 'off' | 'high' | 'max';
+export type SkillJudgeConfig = { model: string; reasoningEffort: ReasoningEffort };
 
 export type WorkerConfig = {
   databaseUrl: string;
   provider: string;
-  model: string;
   apiBaseUrl: string;
   apiKey: string;
   timeoutMs: number;
   workerId: string;
   buildVersion: string;
+  skillConfigs: Record<HarnessSkill, SkillJudgeConfig>;
 };
 
 function required(env: WorkerEnvironment, name: string): string {
   const value = env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+
+function optional(env: WorkerEnvironment, name: string): string | undefined {
+  const value = env[name]?.trim();
+  return value || undefined;
+}
+
+function reasoningEffort(env: WorkerEnvironment, name: string): ReasoningEffort {
+  const value = optional(env, name) ?? 'off';
+  if (value !== 'off' && value !== 'high' && value !== 'max') {
+    throw new Error(`${name} must be one of off, high, max`);
+  }
   return value;
 }
 
@@ -33,14 +51,30 @@ export function loadWorkerConfig(env: WorkerEnvironment = process.env): WorkerCo
     throw new Error('JUDGE_TIMEOUT_MS must be a positive integer');
   }
 
+  const model = required(env, 'JUDGE_MODEL');
+  const skillConfigs: Record<HarnessSkill, SkillJudgeConfig> = {
+    'key-point-extraction': {
+      model: optional(env, 'JUDGE_KEY_POINT_EXTRACTION_MODEL') ?? model,
+      reasoningEffort: reasoningEffort(env, 'JUDGE_KEY_POINT_EXTRACTION_REASONING_EFFORT'),
+    },
+    'question-judge': {
+      model: optional(env, 'JUDGE_QUESTION_MODEL') ?? model,
+      reasoningEffort: reasoningEffort(env, 'JUDGE_QUESTION_REASONING_EFFORT'),
+    },
+    'final-answer-judge': {
+      model: optional(env, 'JUDGE_FINAL_ANSWER_MODEL') ?? model,
+      reasoningEffort: reasoningEffort(env, 'JUDGE_FINAL_ANSWER_REASONING_EFFORT'),
+    },
+  };
+
   return {
     databaseUrl,
     provider: required(env, 'JUDGE_PROVIDER'),
-    model: required(env, 'JUDGE_MODEL'),
     apiBaseUrl,
     apiKey: required(env, 'JUDGE_API_KEY'),
     timeoutMs,
     workerId: required(env, 'WORKER_ID'),
     buildVersion: required(env, 'BUILD_VERSION'),
+    skillConfigs,
   };
 }

@@ -6,14 +6,20 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { HarnessInvoker, HarnessInvocation } from './semantic-judge.js';
 import { SemanticJudgeRuntimeError } from './semantic-judge.js';
-import type { WorkerConfig } from '../config.js';
+import type { ReasoningEffort, WorkerConfig } from '../config.js';
 
 type ChildResult = { code: number; stdout: string; stderr: string };
 
 export type HarnessInvokerDependencies = {
   tempDirectory?: () => Promise<string>;
   profilePatchPath?: string;
+  reasoningPatchPath?: string;
   entryPoint?: string;
+};
+
+type HarnessInvokerConfig = Pick<WorkerConfig, 'apiBaseUrl' | 'apiKey' | 'timeoutMs'> & {
+  model: string;
+  reasoningEffort?: ReasoningEffort;
 };
 
 export function resolveHarnessEntryPoint(): string {
@@ -33,6 +39,17 @@ function defaultProfilePatchPath(): string {
     resolve(process.cwd(), 'spikes/deepseek-harness/profile.patch.yml'),
     resolve(process.cwd(), '../spikes/deepseek-harness/profile.patch.yml'),
     resolve(process.cwd(), '../../spikes/deepseek-harness/profile.patch.yml'),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+}
+
+function defaultReasoningPatchPath(reasoningEffort: ReasoningEffort): string | undefined {
+  if (reasoningEffort === 'off') return undefined;
+  const fileName = reasoningEffort === 'high' ? 'reasoning-high.patch.yml' : 'reasoning-max.patch.yml';
+  const candidates = [
+    resolve(process.cwd(), `spikes/deepseek-harness/${fileName}`),
+    resolve(process.cwd(), `../spikes/deepseek-harness/${fileName}`),
+    resolve(process.cwd(), `../../spikes/deepseek-harness/${fileName}`),
   ];
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
@@ -69,11 +86,14 @@ function tempHome(): Promise<string> {
 }
 
 export function createHarnessInvoker(
-  config: WorkerConfig,
+  config: HarnessInvokerConfig,
   dependencies: HarnessInvokerDependencies = {},
 ): HarnessInvoker {
   const entryPoint = dependencies.entryPoint ?? resolveHarnessEntryPoint();
   const profilePatchPath = dependencies.profilePatchPath ?? defaultProfilePatchPath();
+  const reasoningEffort = config.reasoningEffort ?? 'off';
+  const reasoningPatchPath = dependencies.reasoningPatchPath ?? defaultReasoningPatchPath(reasoningEffort);
+  const profilePatchPaths = [profilePatchPath, ...(reasoningPatchPath ? [reasoningPatchPath] : [])];
   const makeHome = dependencies.tempDirectory ?? tempHome;
 
   return async (request: HarnessInvocation): Promise<unknown> => {
@@ -97,11 +117,12 @@ export function createHarnessInvoker(
         DEEPSEEK_API_KEY: config.apiKey,
         DEEPSEEK_BASE_URL: config.apiBaseUrl,
         DEEPSEEK_MODEL: config.model,
+        TURTLE_SOUP_HARNESS_MODEL: config.model,
         OPENAI_API_KEY: config.apiKey,
         OPENAI_BASE_URL: config.apiBaseUrl,
         OPENAI_MODEL: config.model,
       };
-      const child = await runChildWithProfile(entryPoint, profilePatchPath, task, environment, runtimeHome, timeoutMs);
+      const child = await runChildWithProfile(entryPoint, profilePatchPaths, task, environment, runtimeHome, timeoutMs);
       if (child.code !== 0) {
         throw new SemanticJudgeRuntimeError('TRANSPORT_ERROR', child.stderr || child.stdout || `Harness exited with ${child.code}`);
       }
@@ -114,13 +135,14 @@ export function createHarnessInvoker(
 
 async function runChildWithProfile(
   entryPoint: string,
-  profilePatchPath: string,
+  profilePatchPaths: string[],
   task: string,
   environment: NodeJS.ProcessEnv,
   cwd: string,
   timeoutMs: number,
 ): Promise<ChildResult> {
-  const child = spawn(process.execPath, [entryPoint, '--profile', 'headless', '--patch', profilePatchPath, task], {
+  const patchArgs = profilePatchPaths.flatMap((path) => ['--patch', path]);
+  const child = spawn(process.execPath, [entryPoint, '--profile', 'headless', ...patchArgs, task], {
     cwd,
     env: environment,
     shell: false,

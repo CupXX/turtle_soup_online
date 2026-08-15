@@ -2,8 +2,7 @@ import type { JudgeErrorCode, SemanticJudge } from '@turtle-soup/contracts';
 import { loadWorkerConfig, type WorkerConfig, type WorkerEnvironment } from './config.js';
 import { claimNextAction, claimNextExtraction, recordExtractionRetry, type ClaimedAction, type ClaimedExtraction } from './db/queue.js';
 import { writeHeartbeat } from './db/heartbeat.js';
-import { createHarnessInvoker } from './runtime/create-harness-invoker.js';
-import { HarnessSemanticJudge } from './runtime/harness-semantic-judge.js';
+import { createSemanticJudge } from './runtime/create-semantic-judge.js';
 import { SemanticJudgeRuntimeError } from './runtime/semantic-judge.js';
 import { JudgeValidationError } from './skills/validate-result.js';
 import { processClaimedAction } from './processors/action-processor.js';
@@ -30,7 +29,7 @@ function retryCode(error: unknown): RetryCode | 'LEASE_LOST' | null {
 }
 
 function createJudge(config: WorkerConfig): SemanticJudge {
-  return new HarnessSemanticJudge(createHarnessInvoker(config), config.timeoutMs);
+  return createSemanticJudge(config).judge;
 }
 
 export async function startWorker(

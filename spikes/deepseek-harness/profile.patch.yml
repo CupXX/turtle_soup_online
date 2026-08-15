@@ -78,3 +78,10 @@
 - id: llm-deepseek
   config:
     thinking: disabled
+
+# The base bundle owns the default model, so pin it through a per-process
+# environment value instead of relying on the bundle's Flash default.
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: !!js process.env.TURTLE_SOUP_HARNESS_MODEL ?? 'deepseek-v4-flash'
