@@ -402,7 +402,7 @@ export function renderRegressionReport(
     '- This single-puzzle comparison is evidence for the next experiment, not a permanent cross-game model-routing decision.',
     '',
   );
-  return `${lines.join('\n')}\n`;
+  return `${lines.join('\n').trimEnd()}\n`;
 }
 
 export type RegressionResultsDocument = {

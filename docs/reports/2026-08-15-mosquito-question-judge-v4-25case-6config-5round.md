@@ -82,4 +82,3 @@
 - Valid schema results with semantic misses are model/policy observations; transport, timeout, and schema failures are runtime reliability observations.
 - Verdict correctness and key-point coverage are evaluated independently. A correct verdict with no KP, or a BOTH verdict with a correctly covered true proposition, is intentional.
 - This single-puzzle comparison is evidence for the next experiment, not a permanent cross-game model-routing decision.
-
