@@ -1,6 +1,6 @@
 import type { KeyPointExtractionInput } from '@turtle-soup/contracts';
 
-export const KEY_POINT_EXTRACTION_PROMPT_VERSION = 'key-point-extraction-v2';
+export const KEY_POINT_EXTRACTION_PROMPT_VERSION = 'key-point-extraction-v3';
 
 export function buildKeyPointExtractionPrompt(input: KeyPointExtractionInput): string {
   return [
@@ -17,7 +17,14 @@ export function buildKeyPointExtractionPrompt(input: KeyPointExtractionInput): s
     'State only the hidden cause or relationship needed to reconstruct the solution.',
     'Do not include a surface time or action merely to contextualize the hidden fact.',
     'Do not invent unsupported details.',
-    'Do not mechanically split one semantic fact.',
+    'First silently decompose full_solution into atomic hidden facts and causal relationships.',
+    'Select final key points that are independently discoverable and independently score-worthy.',
+    'INDEPENDENT DISCOVERY TEST: a player should be able to ask a natural yes-or-no question that fully discovers this point without also having to state another selected point.',
+    'PARTIAL COVERAGE SANITY TEST: if one conjunct can be discovered and meaningfully rewarded on its own, do not bind it to a separate conjunct in the same key point.',
+    'Avoid unnecessary conjunctive key points. Separate facts that can be naturally asked, discovered, and rewarded independently.',
+    'Do not split one inseparable relation into fragments, and do not create a fragment that is not meaningful or score-worthy on its own.',
+    'HIDDEN FACT AND CAUSAL BRIDGE: a hidden fact may stand alone; select a causal bridge separately only when that relationship itself explains the surface anomaly and is independently discoverable.',
+    'Prefer the hidden puzzle mechanism over background facts, surface restatements, and consequences that become automatic once earlier points are known.',
     'Keep points concise, non-overlapping, and specific enough that a partial guess does not count as complete coverage.',
     'Return exactly one JSON object with key_points and no explanation.',
     'UNTRUSTED_DATA:',
