@@ -6,6 +6,7 @@ export type GameMessage = Omit<PublicMessage, 'status'> & { status: PublicMessag
 type MessageRowProps = {
   message: GameMessage;
   nickname: string;
+  isOwn?: boolean;
   onChallenge?: (message: GameMessage) => void;
 };
 
@@ -17,10 +18,10 @@ function statusText(message: GameMessage): string {
   return message.verdict ? reactionForVerdict(message.verdict) : '—';
 }
 
-export function MessageRow({ message, nickname, onChallenge }: MessageRowProps) {
+export function MessageRow({ message, nickname, isOwn = false, onChallenge }: MessageRowProps) {
   const judged = message.status === 'JUDGED' && message.verdict;
   return (
-    <article className="message-row" data-status={message.status}>
+    <article className="message-row" data-owner={isOwn ? 'self' : 'other'} data-status={message.status}>
       <div className="message-meta">
         <span className="message-sequence">#{message.sequenceNo}</span>
         <strong>{nickname}</strong>

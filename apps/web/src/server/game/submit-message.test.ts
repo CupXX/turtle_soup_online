@@ -55,6 +55,12 @@ describe('submitMessage', () => {
       verdict: null,
       awardedPoints: 0,
     });
+    const publicInsert = fake.calls.findIndex((query) => query.toLowerCase().includes('insert into api.messages'));
+    const actionInsert = fake.calls.findIndex((query) => query.toLowerCase().includes('insert into private.game_actions'));
+    expect(publicInsert).toBeGreaterThanOrEqual(0);
+    expect(actionInsert).toBeGreaterThan(publicInsert);
+    expect(result.status).toBe('PENDING');
+    expect(result.verdict).toBeNull();
     const query = fake.calls.join('\n').toLowerCase();
     expect(query).toContain("status, verdict");
     expect(query).toContain('private.game_actions');

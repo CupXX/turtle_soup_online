@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PublicGameSnapshot } from '@turtle-soup/contracts';
+import type { PublicGameSnapshot, PublicMessage } from '@turtle-soup/contracts';
 import { GameClient } from './game-client';
 
 const activeSnapshot = {
@@ -78,6 +78,32 @@ describe('GameClient', () => {
     expect(screen.getByRole('heading', { name: '汤面' })).toBeTruthy();
     expect(screen.getByText(/关键点已发现/)).toBeTruthy();
     expect(screen.getByRole('button', { name: '提交正答' })).toBeTruthy();
+  });
+
+  it('shows the sender bubble before an unresolved submit is judged', async () => {
+    const user = userEvent.setup();
+    let resolveSubmit!: (message: PublicMessage) => void;
+    const pendingSubmit = new Promise<PublicMessage>((resolve) => { resolveSubmit = resolve; });
+    render(<GameClient
+      initialSnapshot={activeSnapshot}
+      currentPlayerId="p1"
+      onMessageSubmit={() => pendingSubmit}
+    />);
+
+    await user.type(screen.getByLabelText('提出问题'), '是不是有蚊子？');
+    await user.click(screen.getByRole('button', { name: '发送问题' }));
+
+    const sendingArticle = screen.getByText('是不是有蚊子？').closest('article');
+    expect(sendingArticle?.getAttribute('data-owner')).toBe('self');
+    expect(sendingArticle?.getAttribute('data-status')).toBe('SENDING');
+    expect(screen.getByText('发送中')).toBeTruthy();
+
+    resolveSubmit({
+      id: 'message-1', gameId: 'game-1', playerId: 'p1', sequenceNo: 3, content: '是不是有蚊子？',
+      status: 'PENDING', verdict: null, awardedPoints: 0, createdAt: '', judgedAt: null, updatedAt: '',
+    });
+    await waitFor(() => expect(screen.getByText('是不是有蚊子？').closest('article')?.getAttribute('data-status')).toBe('PENDING'));
+    expect(screen.getByText('判定中')).toBeTruthy();
   });
 
   it('disables both inputs and shows the reveal after the game has ended', () => {

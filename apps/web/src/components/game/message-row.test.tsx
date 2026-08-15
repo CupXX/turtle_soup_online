@@ -28,4 +28,15 @@ describe('MessageRow', () => {
     expect(screen.getByText('+1')).toBeTruthy();
     expect(screen.getByRole('button', { name: '质疑 Cups 的问题' })).toBeTruthy();
   });
+
+  it('marks own and other messages without separating the reaction from the bubble', () => {
+    const ownView = render(<MessageRow message={message} nickname="Cups" isOwn />);
+    const ownArticle = ownView.getByRole('article');
+    expect(ownArticle.getAttribute('data-owner')).toBe('self');
+    expect(ownView.getByText('✅').closest('article')).toBe(ownView.getByText(message.content).closest('article'));
+
+    ownView.unmount();
+    const otherView = render(<MessageRow message={{ ...message, playerId: 'player-2' }} nickname="Other" />);
+    expect(otherView.getByRole('article').getAttribute('data-owner')).toBe('other');
+  });
 });

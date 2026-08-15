@@ -265,21 +265,33 @@ a {
 }
 
 .message-list {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 18px;
 }
 
 .message-row {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 86px 54px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 14px;
   min-height: 70px;
+  width: min(50%, 34rem);
   padding: 13px 14px;
   border: 1px solid #e1ebea;
   border-radius: 14px;
   background: #fbfdfd;
+}
+
+.message-row[data-owner="self"] {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.message-row[data-owner="other"] {
+  align-self: flex-start;
+  text-align: left;
 }
 
 .message-row[data-status="SENDING"] {
@@ -318,6 +330,10 @@ a {
   min-width: 0;
 }
 
+.message-row[data-owner="self"] .message-result {
+  justify-items: end;
+}
+
 .reaction {
   font-size: 1.1rem;
   line-height: 1;
@@ -340,6 +356,10 @@ a {
 .challenge-button:hover:not(:disabled),
 .icon-button:hover:not(:disabled) {
   color: var(--orange);
+}
+
+.message-row[data-owner="self"] .challenge-button {
+  justify-self: end;
 }
 
 .composer {
@@ -719,6 +739,7 @@ thead th {
   }
 
   .message-row {
+    width: min(84%, 34rem);
     grid-template-columns: 58px minmax(0, 1fr) 50px;
     gap: 9px;
     padding: 12px 10px;

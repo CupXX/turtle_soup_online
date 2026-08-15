@@ -6,6 +6,7 @@ export type { GameMessage } from './message-row';
 type MessageFeedProps = {
   messages: GameMessage[];
   players: PublicPlayer[];
+  currentPlayerId?: string;
   events?: PublicGameEvent[];
   onChallenge?: (message: GameMessage) => void;
 };
@@ -16,7 +17,7 @@ function eventLabel(eventType: PublicGameEvent['eventType'], nickname?: string):
   return '管理员结束了本局';
 }
 
-export function MessageFeed({ messages, players, events = [], onChallenge }: MessageFeedProps) {
+export function MessageFeed({ messages, players, currentPlayerId, events = [], onChallenge }: MessageFeedProps) {
   const names = new Map(players.map((player) => [player.id, player.displayNickname]));
   return (
     <section className="feed-panel" aria-labelledby="feed-title">
@@ -30,7 +31,13 @@ export function MessageFeed({ messages, players, events = [], onChallenge }: Mes
       {messages.length ? (
         <div className="message-list">
           {messages.slice().sort((left, right) => left.sequenceNo - right.sequenceNo).map((message) => (
-            <MessageRow key={message.id} message={message} nickname={names.get(message.playerId) ?? '匿名玩家'} onChallenge={onChallenge} />
+            <MessageRow
+              key={message.id}
+              message={message}
+              nickname={names.get(message.playerId) ?? '匿名玩家'}
+              isOwn={Boolean(currentPlayerId && message.playerId === currentPlayerId)}
+              onChallenge={onChallenge}
+            />
           ))}
         </div>
       ) : (

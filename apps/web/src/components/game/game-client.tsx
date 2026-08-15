@@ -208,7 +208,7 @@ export function GameClient({
         <div className="dashboard-grid">
           <div className="dashboard-main">
             <PuzzlePanel game={snapshot.game} />
-            <MessageFeed messages={visibleMessages} players={snapshot.players} events={snapshot.events} />
+            <MessageFeed messages={visibleMessages} players={snapshot.players} currentPlayerId={activePlayerId} events={snapshot.events} />
             <GameRevealPanel reveal={snapshot.reveal} />
             {visiblePrivateFinalAnswer ? (
               <aside className="private-answer-note" aria-live="polite">
