@@ -1,5 +1,7 @@
 # Question Judge v3 and 25-Case Benchmark Implementation Plan
 
+> **Execution status (2026-08-15):** Implemented and frozen at `bea9a8f`; the formal 750-attempt run completed and is recorded in the report/results files named below. Subsequent commits only normalize deterministic report rendering and plan status; they do not alter the frozen model inputs or responses.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the contaminated mosquito-specific Question Judge examples with a generic v3 semantic policy, freeze the approved 25-case gold fixture, and compare DeepSeek Flash/Pro plus GPT-5.6 Luna across truthful reasoning settings over five identical rounds without changing the prompt after the formal run starts.
