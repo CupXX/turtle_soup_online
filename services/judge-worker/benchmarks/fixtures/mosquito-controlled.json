@@ -1,0 +1,20 @@
+{
+  "version": "mosquito-controlled-v1",
+  "puzzle_surface": "一个人半夜醒来打了自己一巴掌，然后闻着一股燃烧的味道安心睡去了，请问发生了什么？",
+  "full_solution": "这个人被蚊子叮醒，打了一下没打着，然后点起了蚊香。",
+  "expected_key_points": [
+    "他是被蚊子叮醒的。",
+    "那一巴掌是为了打蚊子，而且没有打中。",
+    "他随后点燃了蚊香。"
+  ],
+  "questions": [
+    { "id": "dead", "content": "这个人死了吗？", "verdict": "NO", "covered": [] },
+    { "id": "second-person", "content": "故事里还有第二个人吗？", "verdict": "NO", "covered": [] },
+    { "id": "mosquito-present", "content": "是不是有蚊子？", "verdict": "YES", "covered": [] },
+    { "id": "hit-mosquito", "content": "是不是打蚊子？", "verdict": "YES", "covered": [] },
+    { "id": "lit-coil", "content": "是不是点了蚊香？", "verdict": "YES", "covered": [3] },
+    { "id": "mosquito-woke", "content": "是不是蚊子把他弄醒的？", "verdict": "YES", "covered": [1] },
+    { "id": "slap-missed", "content": "他这一巴掌是在打蚊子，但是没打中吗？", "verdict": "YES", "covered": [2] },
+    { "id": "both-with-kp", "content": "他是被蚊子叮醒的，而且后来把蚊子打死了，对吗？", "verdict": "BOTH", "covered": [1] }
+  ]
+}

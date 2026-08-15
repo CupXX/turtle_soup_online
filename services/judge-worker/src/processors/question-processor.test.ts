@@ -77,11 +77,16 @@ describe('processQuestion', () => {
       extractKeyPoints: async () => ({ key_points: [] }),
       judgeQuestion: async (input) => {
         order.push(`judge:${input.puzzle_surface}:${input.full_solution}:${input.current_message}`);
-        expect(input.key_points).toEqual([
-          { id: keyPointId, content: '关键点一' },
-          { id: keyPointTwoId, content: '关键点二' },
-          { id: keyPointThreeId, content: '关键点三' },
-        ]);
+        expect(input).toEqual({
+          puzzle_surface: '表面',
+          full_solution: '真相',
+          key_points: [
+            { id: keyPointId, content: '关键点一' },
+            { id: keyPointTwoId, content: '关键点二' },
+            { id: keyPointThreeId, content: '关键点三' },
+          ],
+          current_message: '当前问题',
+        });
         return { verdict: 'YES', fully_covered_key_point_ids: [keyPointId] };
       },
       judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
