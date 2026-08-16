@@ -9,3 +9,4 @@ out/
 !.env.example
 supabase/.temp/
 *.log
+*.tsbuildinfo
