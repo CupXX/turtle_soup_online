@@ -13,30 +13,39 @@ describe('key-point extraction prompt', () => {
       full_solution: 'solution',
     });
 
-    expect(KEY_POINT_EXTRACTION_PROMPT_VERSION).toBe('key-point-extraction-v3');
+    expect(KEY_POINT_EXTRACTION_PROMPT_VERSION).toBe('key-point-extraction-v4');
     expect(prompt).toContain('Return 3 to 5');
     expect(prompt).toContain('hidden facts or relationships');
     expect(prompt).toContain('supported by full_solution');
     expect(prompt).toContain('Do not restate facts already disclosed by puzzle_surface');
     expect(prompt).toContain('Do not invent unsupported details');
-    expect(prompt).toContain('ordered by story chronology');
     expect(prompt).toContain('Do not create a point merely to explain a surface detail');
-    expect(prompt).toContain('Do not restate an explicit outcome or its immediate consequence');
-    expect(prompt).toContain('If three sufficient points reconstruct the solution, return exactly three');
+    expect(prompt).not.toContain('Do not restate an explicit outcome or its immediate consequence');
     expect(prompt).toContain('Do not use optional slots for post-solution outcomes');
     expect(prompt).toContain('State only the hidden cause or relationship');
     expect(prompt).toContain('Do not include a surface time or action merely to contextualize the hidden fact');
-    expect(prompt).toContain('decompose full_solution into atomic hidden facts and causal relationships');
-    expect(prompt).toContain('independently discoverable and independently score-worthy');
-    expect(prompt).toContain('INDEPENDENT DISCOVERY TEST');
+    expect(prompt).toContain('SELECTION PROCEDURE');
+    expect(prompt).toContain('Silently reconstruct the complete causal story');
+    expect(prompt).toContain('atomic hidden facts, states, identities, relationships, actions, and causal mechanisms');
+    expect(prompt).toContain('meaningful reasoning milestones');
+    expect(prompt).toContain('SINGLE-QUESTION TEST');
     expect(prompt).toContain('PARTIAL COVERAGE SANITY TEST');
-    expect(prompt).toContain('natural yes-or-no question');
-    expect(prompt).toContain('Avoid unnecessary conjunctive key points');
-    expect(prompt).toContain('Separate facts that can be naturally asked, discovered, and rewarded independently');
-    expect(prompt).toContain('Do not split one inseparable relation into fragments');
-    expect(prompt).toContain('HIDDEN FACT AND CAUSAL BRIDGE');
+    expect(prompt).toContain('LOGICAL INDEPENDENCE TEST');
+    expect(prompt).toContain('CHAIN COMPLETENESS TEST');
+    expect(prompt).toContain('Do not create a separate key point merely for an outcome already disclosed by the surface');
+    expect(prompt).toContain('an already-known outcome may be included inside a larger hidden mechanism');
+    expect(prompt).toContain('A later point is independent only if it introduces a genuinely new hidden fact, state, relationship, action, or mechanism');
+    expect(prompt).toContain('Merely narrating the obvious next consequence of an earlier point does not create a new milestone');
+    expect(prompt).toContain('Do not compress to three when four or five are genuinely needed');
+    expect(prompt).toContain("Order the final points by the player's logical reconstruction path");
+    expect(prompt).toContain('normally following story chronology when that is meaningful');
+    expect(prompt).not.toContain('If three sufficient points reconstruct the solution, return exactly three');
+    expect(prompt).not.toContain('ordered by story chronology');
     expect(prompt).not.toContain('蚊子');
     expect(prompt).not.toContain('选择题');
+    expect(prompt).not.toContain('蜜蜂');
+    expect(prompt).not.toContain('回旋镖');
+    expect(prompt).not.toContain('医学院');
   });
 
   it('labels puzzle inputs as untrusted data and excludes conversation state', () => {
@@ -52,13 +61,13 @@ describe('key-point extraction prompt', () => {
     expect(prompt).not.toContain('discovered_key_points');
   });
 
-  it('matches the frozen v3 policy snapshot before runtime data', () => {
+  it('matches the frozen v4 policy snapshot before runtime data', () => {
     const prompt = buildKeyPointExtractionPrompt({
       puzzle_surface: 'surface',
       full_solution: 'solution',
     });
     const policy = prompt.split('\nUNTRUSTED_DATA:\n')[0];
-    const snapshot = readFileSync(new URL('./prompts/key-point-extraction-v3.txt', import.meta.url), 'utf8');
+    const snapshot = readFileSync(new URL('./prompts/key-point-extraction-v4.txt', import.meta.url), 'utf8');
     expect(`${policy}\n`).toBe(snapshot);
   });
 
