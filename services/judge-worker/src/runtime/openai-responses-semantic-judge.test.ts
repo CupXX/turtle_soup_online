@@ -19,7 +19,11 @@ describe('OpenAI Responses production semantic judge', () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
       const body = JSON.parse(String(init?.body)) as { text: { format: { name: string; schema: Record<string, unknown> } } };
       const output = body.text.format.name === 'key_point_extraction'
-        ? { key_points: [{ content: 'one' }, { content: 'two' }, { content: 'three' }] }
+        ? { key_points: [
+          { content: 'one', evidence: [{ content: 'evidence-one' }] },
+          { content: 'two', evidence: [{ content: 'evidence-two' }] },
+          { content: 'three', evidence: [{ content: 'evidence-three' }] },
+        ] }
         : body.text.format.name === 'question_judge'
           ? { verdict: 'YES', fully_covered_key_point_ids: [pointId] }
           : { covered_key_point_ids: [pointId] };
@@ -38,7 +42,11 @@ describe('OpenAI Responses production semantic judge', () => {
     });
 
     await expect(judge.extractKeyPoints({ puzzle_surface: 'surface', full_solution: 'solution' })).resolves.toEqual({
-      key_points: [{ content: 'one' }, { content: 'two' }, { content: 'three' }],
+      key_points: [
+        { content: 'one', evidence: [{ content: 'evidence-one' }] },
+        { content: 'two', evidence: [{ content: 'evidence-two' }] },
+        { content: 'three', evidence: [{ content: 'evidence-three' }] },
+      ],
     });
     await expect(judge.judgeQuestion(questionInput)).resolves.toEqual({
       verdict: 'YES',

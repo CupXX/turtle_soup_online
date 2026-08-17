@@ -1,7 +1,9 @@
 import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
 import type {
+  EvidenceQuestionJudgeResult,
   FinalAnswerJudgeResult,
   KeyPointExtractionResult,
+  LegacyQuestionJudgeResult,
   QuestionJudgeResult,
 } from '@turtle-soup/contracts';
 
@@ -19,11 +21,38 @@ export const KEY_POINT_EXTRACTION_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['content'],
+        required: ['content', 'evidence'],
         properties: {
           content: { type: 'string', minLength: 1, maxLength: 2000 },
+          evidence: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 4,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['content'],
+              properties: {
+                content: { type: 'string', minLength: 1, maxLength: 2000 },
+              },
+            },
+          },
         },
       },
+    },
+  },
+} as const;
+
+export const EVIDENCE_QUESTION_JUDGE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['verdict', 'established_evidence_ids'],
+  properties: {
+    verdict: { enum: ['YES', 'NO', 'BOTH', 'IRRELEVANT'] },
+    established_evidence_ids: {
+      type: 'array',
+      uniqueItems: true,
+      items: { type: 'string', pattern: UUID_PATTERN },
     },
   },
 } as const;
@@ -57,7 +86,7 @@ export const FINAL_ANSWER_JUDGE_SCHEMA = {
 
 export class JudgeValidationError extends Error {
   constructor(
-    public readonly code: 'INVALID_JSON' | 'SCHEMA_INVALID' | 'UNKNOWN_KEY_POINT_ID',
+    public readonly code: 'INVALID_JSON' | 'SCHEMA_INVALID' | 'UNKNOWN_KEY_POINT_ID' | 'UNKNOWN_EVIDENCE_ID',
     message: string,
   ) {
     super(`${code}: ${message}`);
@@ -68,6 +97,7 @@ export class JudgeValidationError extends Error {
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const extractionValidator = ajv.compile(KEY_POINT_EXTRACTION_SCHEMA);
 const questionValidator = ajv.compile(QUESTION_JUDGE_SCHEMA);
+const evidenceQuestionValidator = ajv.compile(EVIDENCE_QUESTION_JUDGE_SCHEMA);
 const finalAnswerValidator = ajv.compile(FINAL_ANSWER_JUDGE_SCHEMA);
 
 function parseResult(value: unknown): unknown {
@@ -92,6 +122,12 @@ function assertUniqueContents(result: KeyPointExtractionResult): void {
   if (new Set(normalized).size !== normalized.length) {
     throw new JudgeValidationError('SCHEMA_INVALID', 'key point contents must be unique');
   }
+  for (const point of result.key_points) {
+    const evidence = point.evidence.map(({ content }) => content.normalize('NFKC').toLocaleLowerCase('zh-CN'));
+    if (new Set(evidence).size !== evidence.length) {
+      throw new JudgeValidationError('SCHEMA_INVALID', 'Evidence contents must be unique within a key point');
+    }
+  }
 }
 
 function assertAllowedIds(ids: string[], allowedIds: readonly string[]): void {
@@ -111,9 +147,20 @@ export function validateKeyPointExtractionResult(value: unknown): KeyPointExtrac
 export function validateQuestionResult(
   value: unknown,
   allowedKeyPointIds: readonly string[],
-): QuestionJudgeResult {
-  const result = validate<QuestionJudgeResult>(value, questionValidator);
+): LegacyQuestionJudgeResult {
+  const result = validate<LegacyQuestionJudgeResult>(value, questionValidator);
   assertAllowedIds(result.fully_covered_key_point_ids, allowedKeyPointIds);
+  return result;
+}
+
+export function validateEvidenceQuestionResult(
+  value: unknown,
+  allowedEvidenceIds: readonly string[],
+): EvidenceQuestionJudgeResult {
+  const result = validate<EvidenceQuestionJudgeResult>(value, evidenceQuestionValidator);
+  const allowed = new Set(allowedEvidenceIds);
+  const unknown = result.established_evidence_ids.find((id) => !allowed.has(id));
+  if (unknown) throw new JudgeValidationError('UNKNOWN_EVIDENCE_ID', `unknown Evidence id: ${unknown}`);
   return result;
 }
 

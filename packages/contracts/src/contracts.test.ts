@@ -28,9 +28,9 @@ describe('canonical judge schemas', () => {
     expect(
       validateExtraction({
         key_points: [
-          { content: 'a' },
-          { content: 'b' },
-          { content: 'c' },
+          { content: 'a', evidence: [{ content: 'a1' }] },
+          { content: 'b', evidence: [{ content: 'b1' }] },
+          { content: 'c', evidence: [{ content: 'c1' }] },
         ],
       }),
     ).toBe(true);

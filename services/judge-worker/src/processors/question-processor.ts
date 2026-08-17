@@ -9,6 +9,7 @@ export type ClaimedQuestionAction = ClaimedAction & { actionType: 'NORMAL_MESSAG
 type ActionInputRow = { messageId: string };
 type SecretInputRow = { puzzleSurface: string; fullSolution: string };
 type KeyPointRow = { id: string; content: string; ordinal: number };
+type EvidenceRow = { id: string; keyPointId: string; content: string; ordinal: number };
 type MessageInputRow = { content: string };
 
 export type QuestionProcessorDependencies = {
@@ -40,7 +41,7 @@ async function loadQuestionInput(
   const messageId = actionRows[0]?.messageId;
   if (!messageId) throw new QuestionInputNotFoundError();
 
-  const [secrets, keyPoints, messages] = await Promise.all([
+  const [secrets, keyPoints, evidence, messages] = await Promise.all([
     sql<SecretInputRow[]>`
       select puzzle_surface as "puzzleSurface", full_solution as "fullSolution"
       from private.game_secrets
@@ -53,6 +54,17 @@ async function loadQuestionInput(
       from private.key_points
       where game_id = ${action.gameId}
       order by ordinal asc
+    `,
+    sql<EvidenceRow[]>`
+      select
+        evidence.id,
+        evidence.key_point_id as "keyPointId",
+        evidence.content,
+        evidence.ordinal
+      from private.key_point_evidence evidence
+      join private.key_points points on points.id = evidence.key_point_id
+      where points.game_id = ${action.gameId}
+      order by points.ordinal asc, evidence.ordinal asc
     `,
     sql<MessageInputRow[]>`
       select content
@@ -67,10 +79,18 @@ async function loadQuestionInput(
   const message = messages[0];
   if (!secret || !message || keyPoints.length < 3) throw new QuestionInputNotFoundError();
 
+  const evidenceByKeyPoint = new Map<string, EvidenceRow[]>();
+  for (const row of evidence) evidenceByKeyPoint.set(row.keyPointId, [...(evidenceByKeyPoint.get(row.keyPointId) ?? []), row]);
   const input: QuestionJudgeInput = {
     puzzle_surface: secret.puzzleSurface,
     full_solution: secret.fullSolution,
-    key_points: keyPoints.map(({ id, content }) => ({ id, content } satisfies JudgeKeyPoint)),
+    key_points: keyPoints.map(({ id, content }) => ({
+      id,
+      content,
+      ...(evidenceByKeyPoint.has(id)
+        ? { evidence: evidenceByKeyPoint.get(id)!.map(({ id: evidenceId, content: evidenceContent }) => ({ id: evidenceId, content: evidenceContent })) }
+        : {}),
+    } satisfies JudgeKeyPoint)),
     current_message: message.content,
   };
   return input;
@@ -84,11 +104,25 @@ export async function processQuestion(
   const sql = dependencies.sql ?? getWorkerDb();
   const input = await loadQuestionInput(action, sql);
   const result = await dependencies.judge.judgeQuestion(input);
+  const evidenceMode = input.key_points.some(({ evidence }) => Boolean(evidence?.length));
+  if (evidenceMode) {
+    if (!('established_evidence_ids' in result)) throw new Error('EVIDENCE_RESULT_REQUIRED');
+    await completeQuestion({
+      actionId: action.id,
+      workerId: dependencies.workerId,
+      verdict: result.verdict,
+      establishedEvidenceIds: result.established_evidence_ids,
+    }, {
+      transaction: dependencies.transaction,
+      now: dependencies.now,
+    });
+    return;
+  }
   await completeQuestion({
     actionId: action.id,
     workerId: dependencies.workerId,
     verdict: result.verdict,
-    fullyCoveredKeyPointIds: result.fully_covered_key_point_ids,
+    fullyCoveredKeyPointIds: 'fully_covered_key_point_ids' in result ? result.fully_covered_key_point_ids : [],
   }, {
     transaction: dependencies.transaction,
     now: dependencies.now,

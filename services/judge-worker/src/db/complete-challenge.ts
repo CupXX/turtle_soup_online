@@ -1,11 +1,13 @@
 import type { ChallengeOutcome, JudgeVerdict } from '@turtle-soup/contracts';
-import { resolveChallengeVotes, type ChallengeVote } from '@turtle-soup/game-core';
+import { resolveChallengeVotes, resolveEvidenceChallengeVotes, type ChallengeVote, type EvidenceChallengeVote } from '@turtle-soup/game-core';
 import { withWorkerTransaction, type WorkerTransaction } from './client.js';
+import { rebuildEvidenceProgressInTransaction } from './rebuild-evidence-progress.js';
 
 export type CompleteChallengeFreshJudgment = {
   slot: number;
   verdict: JudgeVerdict;
   coveredKeyPointIds: string[];
+  establishedEvidenceIds?: string[];
 };
 
 export type CompleteChallengeInput = {
@@ -33,7 +35,7 @@ type ActionRow = {
 type GameRow = { id: string; status: string };
 type ChallengeRow = { id: string; messageId: string; gameId: string; status: string };
 type MessageRow = { id: string; gameId: string; playerId: string; sequenceNo: number | string; status: string; challengeStatus: string; awardedPoints: number };
-type JudgmentRow = { messageId: string; currentVerdict: JudgeVerdict; currentCoveredKeyPointIds: string[] };
+type JudgmentRow = { messageId: string; currentVerdict: JudgeVerdict; currentCoveredKeyPointIds: string[]; currentEstablishedEvidenceIds: string[] };
 type RebuildRow = JudgmentRow & { playerId: string; sequenceNo: number | string; messageStatus: string };
 type PointRow = { id: string };
 type AwardRow = { playerId: string; points: number };
@@ -59,6 +61,14 @@ function uniqueSorted(ids: readonly string[]): string[] {
   const sorted = [...ids].sort();
   for (let index = 1; index < sorted.length; index += 1) {
     if (sorted[index] === sorted[index - 1]) throw new Error('DUPLICATE_KEY_POINT_ID');
+  }
+  return sorted;
+}
+
+function uniqueEvidenceIds(ids: readonly string[]): string[] {
+  const sorted = [...ids].sort();
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (sorted[index] === sorted[index - 1]) throw new Error('DUPLICATE_EVIDENCE_ID');
   }
   return sorted;
 }
@@ -139,7 +149,8 @@ export async function completeChallenge(
       select
         message_id as "messageId",
         original_verdict as "currentVerdict",
-        original_covered_key_point_ids as "currentCoveredKeyPointIds"
+        original_covered_key_point_ids as "currentCoveredKeyPointIds",
+        original_established_evidence_ids as "currentEstablishedEvidenceIds"
       from private.question_judgments
       where message_id = ${message.id}
         and game_id = ${action.gameId}
@@ -157,7 +168,90 @@ export async function completeChallenge(
     const keyPointIds = keyPoints.map(({ id }) => id);
     const allowed = new Set(keyPointIds);
     const originalCovered = uniqueSorted(arrayValue(original.currentCoveredKeyPointIds));
+    const originalEstablished = uniqueEvidenceIds(arrayValue(original.currentEstablishedEvidenceIds));
     const originalVote: ChallengeVote = { valid: true, verdict: original.currentVerdict, coveredKeyPointIds: originalCovered };
+    const evidenceMode = input.freshJudgments.some(({ establishedEvidenceIds }) => establishedEvidenceIds !== undefined);
+    if (evidenceMode) {
+      const evidenceRows = await sql<Array<{ id: string }>>`
+        select evidence.id
+        from private.key_point_evidence evidence
+        join private.key_points points on points.id = evidence.key_point_id
+        where points.game_id = ${action.gameId}
+        order by evidence.id
+      `;
+      const evidenceIds = evidenceRows.map(({ id }) => id);
+      const allowedEvidence = new Set(evidenceIds);
+      for (const evidenceId of originalEstablished) if (!allowedEvidence.has(evidenceId)) throw new Error('UNKNOWN_EVIDENCE_ID');
+      for (const row of input.freshJudgments) {
+        const ids = uniqueEvidenceIds(row.establishedEvidenceIds ?? []);
+        for (const evidenceId of ids) if (!allowedEvidence.has(evidenceId)) throw new Error('UNKNOWN_EVIDENCE_ID');
+      }
+      const evidenceOriginalVote: EvidenceChallengeVote = {
+        valid: true,
+        verdict: original.currentVerdict,
+        establishedEvidenceIds: originalEstablished,
+      };
+      const evidenceFreshVotes: EvidenceChallengeVote[] = input.freshJudgments.map(({ verdict, establishedEvidenceIds }) => ({
+        valid: true,
+        verdict,
+        establishedEvidenceIds: uniqueEvidenceIds(establishedEvidenceIds ?? []),
+      }));
+      const evidenceResolution = resolveEvidenceChallengeVotes([evidenceOriginalVote, ...evidenceFreshVotes], evidenceIds);
+      const challengeOutcome: ChallengeOutcome = evidenceResolution.verdict === evidenceOriginalVote.verdict
+        && sameIds(evidenceResolution.establishedEvidenceIds, originalEstablished)
+        ? 'UPHELD'
+        : 'SUCCESS';
+
+      await sql`
+        update private.question_judgments
+        set current_verdict = ${evidenceResolution.verdict},
+            current_established_evidence_ids = ${evidenceResolution.establishedEvidenceIds}::uuid[],
+            current_covered_key_point_ids = '{}'::uuid[],
+            updated_at = now()
+        where message_id = ${message.id}
+      `;
+      await sql`
+        update api.messages
+        set verdict = ${evidenceResolution.verdict}, updated_at = now()
+        where id = ${message.id} and challenge_status = 'PENDING'
+      `;
+      await rebuildEvidenceProgressInTransaction(sql, action.gameId);
+      const targetProgress = await sql<Array<{ coveredKeyPointIds: string[] }>>`
+        select current_covered_key_point_ids as "coveredKeyPointIds"
+        from private.question_judgments
+        where message_id = ${message.id} and game_id = ${action.gameId}
+      `;
+      await sql`
+        update private.message_challenges
+        set status = 'RESOLVED',
+            valid_judgment_count = 5,
+            resolved_verdict = ${evidenceResolution.verdict},
+            resolved_covered_key_point_ids = ${targetProgress[0]?.coveredKeyPointIds ?? []}::uuid[],
+            resolved_established_evidence_ids = ${evidenceResolution.establishedEvidenceIds}::uuid[],
+            resolved_at = now(),
+            updated_at = now()
+        where id = ${challenge.id} and status = 'PENDING'
+      `;
+      await sql`
+        update api.messages
+        set challenge_status = 'RESOLVED',
+            challenge_outcome = ${challengeOutcome},
+            updated_at = now()
+        where id = ${message.id} and challenge_status = 'PENDING'
+      `;
+      await sql`
+        update private.game_actions
+        set status = 'COMPLETED',
+            lease_owner = null,
+            lease_expires_at = null,
+            error_code = null,
+            updated_at = now()
+        where id = ${input.actionId}
+          and status = 'PROCESSING'
+          and lease_owner = ${input.workerId}
+      `;
+      return;
+    }
     const freshVotes: ChallengeVote[] = input.freshJudgments.map(({ verdict, coveredKeyPointIds }) => ({
       valid: true,
       verdict,
@@ -189,6 +283,7 @@ export async function completeChallenge(
         judgments.message_id as "messageId",
         judgments.current_verdict as "currentVerdict",
         judgments.current_covered_key_point_ids as "currentCoveredKeyPointIds",
+        judgments.current_established_evidence_ids as "currentEstablishedEvidenceIds",
         messages.player_id as "playerId",
         messages.sequence_no as "sequenceNo",
         messages.status as "messageStatus"

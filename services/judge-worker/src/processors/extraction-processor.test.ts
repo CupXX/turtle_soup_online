@@ -40,7 +40,11 @@ function transaction() {
 }
 
 const extraction: KeyPointExtractionResult = {
-  key_points: [{ content: '线索一' }, { content: '线索二' }, { content: '线索三' }],
+  key_points: [
+    { content: '线索一', evidence: [{ content: '证据一' }] },
+    { content: '线索二', evidence: [{ content: '证据二' }] },
+    { content: '线索三', evidence: [{ content: '证据三' }] },
+  ],
 };
 
 describe('processExtraction', () => {

@@ -1,11 +1,12 @@
 import type { JudgeKeyPoint, QuestionJudgeInput, QuestionJudgeResult, SemanticJudge } from '@turtle-soup/contracts';
-import { resolveChallengeVotes, type ChallengeVote } from '@turtle-soup/game-core';
+import { resolveChallengeVotes, resolveEvidenceChallengeVotes, type ChallengeVote, type EvidenceChallengeVote } from '@turtle-soup/game-core';
 import type { Sql } from 'postgres';
 import { getWorkerDb, type WorkerTransaction } from '../db/client.js';
 import { recordChallengeJudgment, type ChallengeJudgmentRecord } from '../db/challenge-judgments.js';
 import { completeChallenge, type CompleteChallengeFreshJudgment } from '../db/complete-challenge.js';
 import type { SkillRuntimeMetadata } from '../runtime/create-semantic-judge.js';
-import { JudgeValidationError, validateQuestionResult } from '../skills/validate-result.js';
+import { JudgeValidationError, validateEvidenceQuestionResult, validateQuestionResult } from '../skills/validate-result.js';
+import { EVIDENCE_QUESTION_JUDGE_PROMPT_VERSION } from '../skills/question-judge.js';
 import type { ClaimedAction } from '../db/queue.js';
 
 export type ClaimedChallengeAction = ClaimedAction & { actionType: 'CHALLENGE' };
@@ -13,10 +14,12 @@ export type ClaimedChallengeAction = ClaimedAction & { actionType: 'CHALLENGE' }
 type ActionInputRow = { challengeId: string };
 type SecretInputRow = { puzzleSurface: string; fullSolution: string };
 type KeyPointRow = { id: string; content: string; ordinal: number };
+type EvidenceRow = { id: string; keyPointId: string; content: string; ordinal: number };
 type MessageInputRow = { content: string };
 type OriginalJudgmentRow = {
   originalVerdict: QuestionJudgeResult['verdict'];
   originalCoveredKeyPointIds: string[];
+  originalEstablishedEvidenceIds: string[];
   promptVersion: string;
   schemaVersion: string;
 };
@@ -24,6 +27,7 @@ type ExistingFreshJudgmentRow = {
   slot: number;
   verdict: QuestionJudgeResult['verdict'] | null;
   coveredKeyPointIds: string[];
+  establishedEvidenceIds: string[];
   valid: boolean;
 };
 type ChallengeInput = {
@@ -31,6 +35,8 @@ type ChallengeInput = {
   question: QuestionJudgeInput;
   original: ChallengeVote;
   keyPointIds: string[];
+  evidenceIds: string[];
+  evidenceMode: boolean;
   existing: ExistingFreshJudgmentRow[];
 };
 
@@ -96,7 +102,7 @@ export async function loadChallengeInput(action: ClaimedChallengeAction, sql: Sq
   const challengeId = actionRows[0]?.challengeId;
   if (!challengeId) throw new ChallengeInputNotFoundError();
 
-  const [secrets, keyPoints, messages, judgments, fresh] = await Promise.all([
+  const [secrets, keyPoints, evidence, messages, judgments, fresh] = await Promise.all([
     sql<SecretInputRow[]>`
       select puzzle_surface as "puzzleSurface", full_solution as "fullSolution"
       from private.game_secrets
@@ -110,6 +116,17 @@ export async function loadChallengeInput(action: ClaimedChallengeAction, sql: Sq
       where game_id = ${action.gameId}
       order by ordinal asc
     `,
+    sql<EvidenceRow[]>`
+      select
+        evidence.id,
+        evidence.key_point_id as "keyPointId",
+        evidence.content,
+        evidence.ordinal
+      from private.key_point_evidence evidence
+      join private.key_points points on points.id = evidence.key_point_id
+      where points.game_id = ${action.gameId}
+      order by points.ordinal asc, evidence.ordinal asc
+    `,
     sql<MessageInputRow[]>`
       select messages.content
       from private.message_challenges challenges
@@ -122,6 +139,7 @@ export async function loadChallengeInput(action: ClaimedChallengeAction, sql: Sq
       select
         original_verdict as "originalVerdict",
         original_covered_key_point_ids as "originalCoveredKeyPointIds",
+        original_established_evidence_ids as "originalEstablishedEvidenceIds",
         prompt_version as "promptVersion",
         schema_version as "schemaVersion"
       from private.question_judgments
@@ -136,6 +154,7 @@ export async function loadChallengeInput(action: ClaimedChallengeAction, sql: Sq
         slot,
         verdict,
         covered_key_point_ids as "coveredKeyPointIds",
+        established_evidence_ids as "establishedEvidenceIds",
         valid
       from private.challenge_judgments
       where challenge_id = ${challengeId}
@@ -147,21 +166,37 @@ export async function loadChallengeInput(action: ClaimedChallengeAction, sql: Sq
   const original = judgments[0];
   if (!secret || !message || !original || keyPoints.length < 3) throw new ChallengeInputNotFoundError();
   const keyPointIds = keyPoints.map(({ id }) => id);
+  const evidenceByKeyPoint = new Map<string, EvidenceRow[]>();
+  for (const row of evidence) evidenceByKeyPoint.set(row.keyPointId, [...(evidenceByKeyPoint.get(row.keyPointId) ?? []), row]);
+  const evidenceIds = evidence.map(({ id }) => id);
   return {
     challengeId,
     question: {
       puzzle_surface: secret.puzzleSurface,
       full_solution: secret.fullSolution,
-      key_points: keyPoints.map(({ id, content }) => ({ id, content } satisfies JudgeKeyPoint)),
+      key_points: keyPoints.map(({ id, content }) => ({
+        id,
+        content,
+        ...(evidenceByKeyPoint.has(id)
+          ? { evidence: evidenceByKeyPoint.get(id)!.map(({ id: evidenceId, content: evidenceContent }) => ({ id: evidenceId, content: evidenceContent })) }
+          : {}),
+      } satisfies JudgeKeyPoint)),
       current_message: message.content,
     },
     original: {
       valid: true,
       verdict: original.originalVerdict,
       coveredKeyPointIds: arrayValue(original.originalCoveredKeyPointIds),
+      establishedEvidenceIds: arrayValue(original.originalEstablishedEvidenceIds),
     },
     keyPointIds,
-    existing: fresh.map((row) => ({ ...row, coveredKeyPointIds: arrayValue(row.coveredKeyPointIds) })),
+    evidenceIds,
+    evidenceMode: evidenceIds.length > 0,
+    existing: fresh.map((row) => ({
+      ...row,
+      coveredKeyPointIds: arrayValue(row.coveredKeyPointIds),
+      establishedEvidenceIds: arrayValue(row.establishedEvidenceIds),
+    })),
   };
 }
 
@@ -183,26 +218,50 @@ export async function processChallenge(
   for (let slot = 1; slot <= 4; slot += 1) {
     const previous = existing.get(slot);
     if (previous?.valid && previous.verdict) {
-      freshJudgments.push({ slot, verdict: previous.verdict, coveredKeyPointIds: previous.coveredKeyPointIds });
+      freshJudgments.push({
+        slot,
+        verdict: previous.verdict,
+        coveredKeyPointIds: previous.coveredKeyPointIds,
+        establishedEvidenceIds: previous.establishedEvidenceIds,
+      });
       continue;
     }
 
     const startedAt = performance.now();
     const selectedJudge = dependencies.judgeFactory?.(slot) ?? dependencies.judge;
     try {
-      const result = validateQuestionResult(await selectedJudge.judgeQuestion(input.question), input.keyPointIds);
+      const rawResult = await selectedJudge.judgeQuestion(input.question);
+      if (input.evidenceMode && !('established_evidence_ids' in rawResult)) throw new JudgeValidationError('SCHEMA_INVALID', 'Evidence result required');
+      if (!input.evidenceMode && !('fully_covered_key_point_ids' in rawResult)) throw new JudgeValidationError('SCHEMA_INVALID', 'legacy coverage result required');
+      const result = input.evidenceMode
+        ? validateEvidenceQuestionResult(rawResult, input.evidenceIds)
+        : validateQuestionResult(rawResult, input.keyPointIds);
+      const recordMetadata = input.evidenceMode
+        ? {
+          ...metadata,
+          skillVersion: EVIDENCE_QUESTION_JUDGE_PROMPT_VERSION,
+          promptVersion: EVIDENCE_QUESTION_JUDGE_PROMPT_VERSION,
+          schemaVersion: 'judge-schema-v2' as const,
+        }
+        : metadata;
       const record: ChallengeJudgmentRecord = {
         challengeId: input.challengeId,
         slot,
-        metadata,
+        metadata: recordMetadata,
         verdict: result.verdict,
-        coveredKeyPointIds: result.fully_covered_key_point_ids,
+        coveredKeyPointIds: 'fully_covered_key_point_ids' in result ? result.fully_covered_key_point_ids : [],
+        establishedEvidenceIds: 'established_evidence_ids' in result ? result.established_evidence_ids : [],
         valid: true,
         errorCode: null,
         latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
       };
       await (dependencies.persistJudgment ?? ((value: ChallengeJudgmentRecord) => recordChallengeJudgment(value))) (record);
-      freshJudgments.push({ slot, verdict: result.verdict, coveredKeyPointIds: result.fully_covered_key_point_ids });
+      freshJudgments.push({
+        slot,
+        verdict: result.verdict,
+        coveredKeyPointIds: 'fully_covered_key_point_ids' in result ? result.fully_covered_key_point_ids : [],
+        establishedEvidenceIds: 'established_evidence_ids' in result ? result.established_evidence_ids : [],
+      });
     } catch (error) {
       const invalidRecord: ChallengeJudgmentRecord = {
         challengeId: input.challengeId,
@@ -210,6 +269,7 @@ export async function processChallenge(
         metadata,
         verdict: null,
         coveredKeyPointIds: [],
+        establishedEvidenceIds: [],
         valid: false,
         errorCode: errorCode(error),
         latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
@@ -222,10 +282,17 @@ export async function processChallenge(
 
   // Exercise the same pure resolver before the transaction so malformed fake
   // results fail before any public verdict can be changed.
-  resolveChallengeVotes([
-    input.original,
-    ...freshJudgments.map(({ verdict, coveredKeyPointIds }) => ({ valid: true, verdict, coveredKeyPointIds })),
-  ], input.keyPointIds);
+  if (input.evidenceMode) {
+    resolveEvidenceChallengeVotes([
+      input.original as EvidenceChallengeVote,
+      ...freshJudgments.map(({ verdict, establishedEvidenceIds }) => ({ valid: true, verdict, establishedEvidenceIds })),
+    ], input.evidenceIds);
+  } else {
+    resolveChallengeVotes([
+      input.original,
+      ...freshJudgments.map(({ verdict, coveredKeyPointIds }) => ({ valid: true, verdict, coveredKeyPointIds })),
+    ], input.keyPointIds);
+  }
 
   const complete = dependencies.complete ?? ((value: {
     actionId: string;

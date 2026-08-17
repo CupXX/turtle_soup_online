@@ -30,7 +30,11 @@ const baseInput = {
   gameId,
   inputVersion: 1,
   workerId: 'worker-1',
-  keyPoints: [{ content: '客人用伞柄敲门' }, { content: '客人从暗门离开' }, { content: '老板误以为房间没人' }],
+  keyPoints: [
+    { content: '客人用伞柄敲门', evidence: [{ content: '伞柄敲门' }] },
+    { content: '客人从暗门离开', evidence: [{ content: '暗门离开' }] },
+    { content: '老板误以为房间没人', evidence: [{ content: '老板误判房间有人' }] },
+  ],
 };
 
 function eligibleRows() {
@@ -69,7 +73,11 @@ describe('completeExtraction', () => {
 
     await expect(completeExtraction({
       ...baseInput,
-      keyPoints: [{ content: '线索' }, { content: ' 线索 ' }, { content: '另一条' }],
+      keyPoints: [
+        { content: '线索', evidence: [{ content: '事实一' }] },
+        { content: ' 线索 ', evidence: [{ content: '事实二' }] },
+        { content: '另一条', evidence: [{ content: '事实三' }] },
+      ],
     }, { transaction: fake.transaction })).rejects.toThrow('key points must be unique');
 
     expect(fake.started).toBe(0);

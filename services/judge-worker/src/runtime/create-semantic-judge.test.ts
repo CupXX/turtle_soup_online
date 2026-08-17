@@ -24,7 +24,7 @@ describe('createSemanticJudge', () => {
       createJudge: (skill, selected) => {
         invocations.push(`${skill}:${selected.model}:${selected.reasoningEffort}`);
         return {
-          extractKeyPoints: async () => ({ key_points: [{ content: 'point' }] }),
+          extractKeyPoints: async () => ({ key_points: [{ content: 'point', evidence: [{ content: 'evidence' }] }] }),
           judgeQuestion: async () => ({ verdict: 'YES', fully_covered_key_point_ids: [] }),
           judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
         } satisfies SemanticJudge;

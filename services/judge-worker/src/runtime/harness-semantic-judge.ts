@@ -10,11 +10,13 @@ import { buildFinalAnswerJudgePrompt } from '../skills/final-answer-judge.js';
 import { buildKeyPointExtractionPrompt } from '../skills/key-point-extraction.js';
 import { buildQuestionJudgePrompt } from '../skills/question-judge.js';
 import {
+  EVIDENCE_QUESTION_JUDGE_SCHEMA,
   FINAL_ANSWER_JUDGE_SCHEMA,
   JudgeValidationError,
   KEY_POINT_EXTRACTION_SCHEMA,
   QUESTION_JUDGE_SCHEMA,
   validateFinalAnswerResult,
+  validateEvidenceQuestionResult,
   validateKeyPointExtractionResult,
   validateQuestionResult,
 } from '../skills/validate-result.js';
@@ -35,6 +37,15 @@ export class HarnessSemanticJudge {
   }
 
   judgeQuestion(input: QuestionJudgeInput): Promise<QuestionJudgeResult> {
+    const evidenceIds = input.key_points.flatMap(({ evidence }) => evidence?.map(({ id }) => id) ?? []);
+    if (evidenceIds.length > 0) {
+      return this.call(
+        'question-judge',
+        buildQuestionJudgePrompt(input),
+        EVIDENCE_QUESTION_JUDGE_SCHEMA,
+        (raw) => validateEvidenceQuestionResult(raw, evidenceIds),
+      );
+    }
     return this.call(
       'question-judge',
       buildQuestionJudgePrompt(input),

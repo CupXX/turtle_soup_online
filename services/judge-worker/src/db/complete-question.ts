@@ -1,14 +1,17 @@
 import type { JudgeVerdict } from '@turtle-soup/contracts';
 import { withWorkerTransaction, type WorkerTransaction } from './client.js';
+import { rebuildEvidenceProgressInTransaction } from './rebuild-evidence-progress.js';
 import { QUESTION_JUDGE_PROMPT_VERSION } from '../skills/question-judge.js';
 
 const QUESTION_JUDGE_SCHEMA_VERSION = 'judge-schema-v1';
+const EVIDENCE_QUESTION_JUDGE_SCHEMA_VERSION = 'judge-schema-v2';
 
 export type CompleteQuestionInput = {
   actionId: string;
   workerId: string;
   verdict: JudgeVerdict;
-  fullyCoveredKeyPointIds: string[];
+  fullyCoveredKeyPointIds?: string[];
+  establishedEvidenceIds?: string[];
 };
 
 export type CompleteQuestionDependencies = {
@@ -51,12 +54,28 @@ function uniqueKeyPointIds(ids: string[]): string[] {
   return sorted;
 }
 
+function uniqueEvidenceIds(ids: string[]): string[] {
+  const sorted = [...ids].sort();
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (sorted[index] === sorted[index - 1]) throw new Error('DUPLICATE_EVIDENCE_ID');
+  }
+  return sorted;
+}
+
 export async function completeQuestion(
   input: CompleteQuestionInput,
   dependencies: CompleteQuestionDependencies = {},
 ): Promise<void> {
   if (!VERDICTS.has(input.verdict)) throw new Error('INVALID_VERDICT');
-  const ids = uniqueKeyPointIds(input.fullyCoveredKeyPointIds);
+  if (input.fullyCoveredKeyPointIds === undefined && input.establishedEvidenceIds === undefined) {
+    throw new Error('MISSING_DISCOVERY_RESULT');
+  }
+  if (input.fullyCoveredKeyPointIds !== undefined && input.establishedEvidenceIds !== undefined) {
+    throw new Error('AMBIGUOUS_DISCOVERY_RESULT');
+  }
+  const ids = uniqueKeyPointIds(input.fullyCoveredKeyPointIds ?? []);
+  const evidenceIds = uniqueEvidenceIds(input.establishedEvidenceIds ?? []);
+  const evidenceMode = input.establishedEvidenceIds !== undefined;
   const now = dependencies.now ?? new Date();
 
   await transactionFor(dependencies)(async (sql) => {
@@ -98,6 +117,89 @@ export async function completeQuestion(
     `;
     const message = messages[0];
     if (!message || message.status !== 'PENDING') return;
+
+    if (evidenceMode) {
+      const knownEvidence = await sql<Array<{ id: string }>>`
+        select evidence.id
+        from private.key_point_evidence evidence
+        join private.key_points points on points.id = evidence.key_point_id
+        where points.game_id = ${action.gameId}
+        order by evidence.id
+      `;
+      const knownEvidenceIds = new Set(knownEvidence.map(({ id }) => id));
+      for (const evidenceId of evidenceIds) {
+        if (!knownEvidenceIds.has(evidenceId)) throw new Error('UNKNOWN_EVIDENCE_ID');
+      }
+
+      await sql`
+        insert into private.question_judgments
+          (
+            message_id,
+            game_id,
+            player_id,
+            original_verdict,
+            original_covered_key_point_ids,
+            original_established_evidence_ids,
+            current_verdict,
+            current_covered_key_point_ids,
+            current_established_evidence_ids,
+            prompt_version,
+            schema_version,
+            completed_at,
+            updated_at
+          )
+        values
+          (
+            ${message.id},
+            ${action.gameId},
+            ${action.playerId},
+            ${input.verdict},
+            '{}',
+            ${evidenceIds},
+            ${input.verdict},
+            '{}',
+            ${evidenceIds},
+            'question-judge-v7',
+            ${EVIDENCE_QUESTION_JUDGE_SCHEMA_VERSION},
+            now(),
+            now()
+          )
+        on conflict (message_id) do nothing
+      `;
+      await sql`
+        update api.messages
+        set status = 'JUDGED',
+            verdict = ${input.verdict},
+            awarded_points = 0,
+            judged_at = now(),
+            updated_at = now()
+        where id = ${message.id} and status = 'PENDING'
+      `;
+      await rebuildEvidenceProgressInTransaction(sql, action.gameId);
+      const targetProgress = await sql<Array<{ coveredKeyPointIds: string[] }>>`
+        select current_covered_key_point_ids as "coveredKeyPointIds"
+        from private.question_judgments
+        where message_id = ${message.id} and game_id = ${action.gameId}
+      `;
+      await sql`
+        update private.question_judgments
+        set original_covered_key_point_ids = ${targetProgress[0]?.coveredKeyPointIds ?? []}::uuid[],
+            updated_at = now()
+        where message_id = ${message.id} and game_id = ${action.gameId}
+      `;
+      await sql`
+        update private.game_actions
+        set status = 'COMPLETED',
+            lease_owner = null,
+            lease_expires_at = null,
+            error_code = null,
+            updated_at = now()
+        where id = ${input.actionId}
+          and status = 'PROCESSING'
+          and lease_owner = ${input.workerId}
+      `;
+      return;
+    }
 
     for (const keyPointId of ids) {
       // Key points are immutable after activation; a read is enough to

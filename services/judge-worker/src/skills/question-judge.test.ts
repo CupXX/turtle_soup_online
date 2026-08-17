@@ -90,4 +90,23 @@ describe('question judge prompt', () => {
     const snapshot = readFileSync(new URL('./prompts/question-judge-v6.txt', import.meta.url), 'utf8');
     expect(`${policy}\n`).toBe(snapshot);
   });
+
+  it('switches only Evidence-enabled games to the cumulative Evidence output', () => {
+    const prompt = buildQuestionJudgePrompt({
+      puzzle_surface: 'surface',
+      full_solution: 'solution',
+      key_points: [{
+        id: '00000000-0000-4000-8000-000000000001',
+        content: 'point',
+        evidence: [{ id: '00000000-0000-4000-8000-000000000002', content: 'fact' }],
+      }],
+      current_message: 'is the fact true?',
+    });
+
+    expect(prompt).toContain('PHASE D - ATOMIC EVIDENCE ESTABLISHMENT');
+    expect(prompt).toContain('current_message together with that verdict');
+    expect(prompt).toContain('NO may establish a pre-defined negative Evidence fact');
+    expect(prompt).toContain('established_evidence_ids');
+    expect(prompt).not.toContain('Return every fully covered key-point ID');
+  });
 });

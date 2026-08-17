@@ -10,6 +10,7 @@ import type {
 import type { JudgeAttemptParent, JudgeAttemptRecord } from '../db/judge-attempts.js';
 import type { HarnessSkill } from './semantic-judge.js';
 import type { JudgeRuntime } from './create-semantic-judge.js';
+import { EVIDENCE_QUESTION_JUDGE_PROMPT_VERSION } from '../skills/question-judge.js';
 
 export type JudgeAttemptRecorder = (record: JudgeAttemptRecord) => Promise<void>;
 
@@ -34,10 +35,10 @@ export function createAuditedSemanticJudge(
     const startedAt = performance.now();
     try {
       const result = await invoke(input);
-      await record(recorder, runtime, parent, skill, performance.now() - startedAt, true, null);
+      await record(recorder, runtime, parent, skill, input, performance.now() - startedAt, true, null);
       return result;
     } catch (error) {
-      await record(recorder, runtime, parent, skill, performance.now() - startedAt, false, errorCode(error));
+      await record(recorder, runtime, parent, skill, input, performance.now() - startedAt, false, errorCode(error));
       throw error;
     }
   };
@@ -57,15 +58,30 @@ async function record(
   runtime: JudgeRuntime,
   parent: JudgeAttemptParent,
   skill: HarnessSkill,
+  input: unknown,
   latencyMs: number,
   resultValid: boolean,
   error: string | null,
 ): Promise<void> {
   try {
+    const evidenceQuestion = skill === 'question-judge'
+      && typeof input === 'object'
+      && input !== null
+      && 'key_points' in input
+      && Array.isArray(input.key_points)
+      && input.key_points.some((point) => typeof point === 'object' && point !== null && 'evidence' in point);
+    const metadata = evidenceQuestion
+      ? {
+        ...runtime.metadata[skill],
+        skillVersion: EVIDENCE_QUESTION_JUDGE_PROMPT_VERSION,
+        promptVersion: EVIDENCE_QUESTION_JUDGE_PROMPT_VERSION,
+        schemaVersion: 'judge-schema-v2' as const,
+      }
+      : runtime.metadata[skill];
     await recorder({
       parent,
       skill,
-      ...runtime.metadata[skill],
+      ...metadata,
       latencyMs: Math.max(0, Math.round(latencyMs)),
       inputTokens: null,
       outputTokens: null,

@@ -21,7 +21,11 @@ describe('key point extraction v3 benchmark runner', () => {
     const factory = vi.fn(() => ({
       extractKeyPoints: async (input: KeyPointExtractionInput): Promise<KeyPointExtractionResult> => {
         calls.push(input);
-        return { key_points: [{ content: '隐藏事实一' }, { content: '隐藏事实二' }, { content: '隐藏事实三' }] };
+        return { key_points: [
+          { content: '隐藏事实一', evidence: [{ content: '证据一' }] },
+          { content: '隐藏事实二', evidence: [{ content: '证据二' }] },
+          { content: '隐藏事实三', evidence: [{ content: '证据三' }] },
+        ] };
       },
     }));
     const result = await runKeyPointExtractionV3Regression({ rounds: 5, writeReports: false }, {
@@ -41,7 +45,11 @@ describe('key point extraction v3 benchmark runner', () => {
     const writeFile = vi.fn();
     await runKeyPointExtractionV3Regression({ rounds: 1, writeReports: false }, {
       loadFixture: async () => fixture,
-      judgeFactory: () => ({ extractKeyPoints: async () => ({ key_points: [{ content: '一' }, { content: '二' }, { content: '三' }] }) }),
+      judgeFactory: () => ({ extractKeyPoints: async () => ({ key_points: [
+        { content: '一', evidence: [{ content: '证据一' }] },
+        { content: '二', evidence: [{ content: '证据二' }] },
+        { content: '三', evidence: [{ content: '证据三' }] },
+      ] }) }),
       writeFile,
       log: () => undefined,
     });

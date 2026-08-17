@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   buildKeyPointExtractionPrompt,
@@ -13,12 +12,14 @@ describe('key-point extraction prompt', () => {
       full_solution: 'solution',
     });
 
-    expect(KEY_POINT_EXTRACTION_PROMPT_VERSION).toBe('key-point-extraction-v4');
+    expect(KEY_POINT_EXTRACTION_PROMPT_VERSION).toBe('key-point-extraction-v5');
     expect(prompt).toContain('Return 3 to 5');
-    expect(prompt).toContain('hidden facts or relationships');
+    expect(prompt).toContain('meaningful hidden milestones');
     expect(prompt).toContain('supported by full_solution');
     expect(prompt).toContain('Do not restate facts already disclosed by puzzle_surface');
     expect(prompt).toContain('Do not invent unsupported details');
+    expect(prompt).toContain('atomic Evidence facts');
+    expect(prompt).toContain('Evidence is hidden completion data');
     expect(prompt).toContain('Do not create a point merely to explain a surface detail');
     expect(prompt).not.toContain('Do not restate an explicit outcome or its immediate consequence');
     expect(prompt).toContain('Do not use optional slots for post-solution outcomes');
@@ -61,20 +62,22 @@ describe('key-point extraction prompt', () => {
     expect(prompt).not.toContain('discovered_key_points');
   });
 
-  it('matches the frozen v4 policy snapshot before runtime data', () => {
+  it('keeps the v5 policy focused on Evidence rather than history', () => {
     const prompt = buildKeyPointExtractionPrompt({
       puzzle_surface: 'surface',
       full_solution: 'solution',
     });
-    const policy = prompt.split('\nUNTRUSTED_DATA:\n')[0];
-    const snapshot = readFileSync(new URL('./prompts/key-point-extraction-v4.txt', import.meta.url), 'utf8');
-    expect(`${policy}\n`).toBe(snapshot);
+    expect(prompt).toContain('minimum Evidence facts required for completion');
+    expect(prompt).toContain('Evidence may be negative only when full_solution supports that negative fact');
+    expect(prompt).not.toContain('conversation_history');
   });
 
   it('keeps the result schema at exactly three to five content points', () => {
     expect(KEY_POINT_EXTRACTION_SCHEMA.required).toEqual(['key_points']);
     expect(KEY_POINT_EXTRACTION_SCHEMA.properties.key_points.minItems).toBe(3);
     expect(KEY_POINT_EXTRACTION_SCHEMA.properties.key_points.maxItems).toBe(5);
-    expect(KEY_POINT_EXTRACTION_SCHEMA.properties.key_points.items.required).toEqual(['content']);
+    expect(KEY_POINT_EXTRACTION_SCHEMA.properties.key_points.items.required).toEqual(['content', 'evidence']);
+    expect(KEY_POINT_EXTRACTION_SCHEMA.properties.key_points.items.properties.evidence.minItems).toBe(1);
+    expect(KEY_POINT_EXTRACTION_SCHEMA.properties.key_points.items.properties.evidence.maxItems).toBe(4);
   });
 });

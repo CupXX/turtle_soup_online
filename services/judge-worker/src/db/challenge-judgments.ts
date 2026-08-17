@@ -10,6 +10,7 @@ export type ChallengeJudgmentRecord = {
   metadata: SkillRuntimeMetadata;
   verdict: JudgeVerdict | null;
   coveredKeyPointIds: string[];
+  establishedEvidenceIds?: string[];
   valid: boolean;
   errorCode: string | null;
   latencyMs: number | null;
@@ -42,6 +43,7 @@ export async function recordChallengeJudgment(
         schema_version,
         verdict,
         covered_key_point_ids,
+        established_evidence_ids,
         valid,
         error_code,
         latency_ms,
@@ -61,6 +63,7 @@ export async function recordChallengeJudgment(
         ${input.metadata.schemaVersion},
         ${input.verdict},
         ${input.coveredKeyPointIds}::uuid[],
+        ${input.establishedEvidenceIds ?? []}::uuid[],
         ${input.valid},
         ${input.errorCode},
         ${input.latencyMs},
@@ -76,6 +79,7 @@ export async function recordChallengeJudgment(
           schema_version = excluded.schema_version,
           verdict = excluded.verdict,
           covered_key_point_ids = excluded.covered_key_point_ids,
+          established_evidence_ids = excluded.established_evidence_ids,
           valid = excluded.valid,
           error_code = excluded.error_code,
           latency_ms = excluded.latency_ms,

@@ -17,9 +17,9 @@ export class FakeSemanticJudge implements SemanticJudge {
   async extractKeyPoints(): Promise<KeyPointExtractionResult> {
     return this.responses.extraction ?? {
       key_points: [
-        { content: 'fake key point one' },
-        { content: 'fake key point two' },
-        { content: 'fake key point three' },
+        { content: 'fake key point one', evidence: [{ content: 'fake evidence one' }] },
+        { content: 'fake key point two', evidence: [{ content: 'fake evidence two' }] },
+        { content: 'fake key point three', evidence: [{ content: 'fake evidence three' }] },
       ],
     };
   }

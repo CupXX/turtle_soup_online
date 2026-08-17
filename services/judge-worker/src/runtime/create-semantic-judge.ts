@@ -14,7 +14,7 @@ export type SkillRuntimeMetadata = {
   reasoningEffort: SkillJudgeConfig['reasoningEffort'];
   skillVersion: string;
   promptVersion: string;
-  schemaVersion: 'judge-schema-v1';
+  schemaVersion: 'judge-schema-v1' | 'judge-schema-v2';
 };
 
 export type JudgeRuntime = {

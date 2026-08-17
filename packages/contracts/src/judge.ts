@@ -4,12 +4,21 @@ export type KeyPointExtractionInput = {
 };
 
 export type KeyPointExtractionResult = {
-  key_points: Array<{ content: string }>;
+  key_points: Array<{
+    content: string;
+    evidence: Array<{ content: string }>;
+  }>;
+};
+
+export type JudgeEvidence = {
+  id: string;
+  content: string;
 };
 
 export type JudgeKeyPoint = {
   id: string;
   content: string;
+  evidence?: JudgeEvidence[];
 };
 
 export type QuestionJudgeInput = {
@@ -19,10 +28,17 @@ export type QuestionJudgeInput = {
   current_message: string;
 };
 
-export type QuestionJudgeResult = {
+export type LegacyQuestionJudgeResult = {
   verdict: JudgeVerdict;
   fully_covered_key_point_ids: string[];
 };
+
+export type EvidenceQuestionJudgeResult = {
+  verdict: JudgeVerdict;
+  established_evidence_ids: string[];
+};
+
+export type QuestionJudgeResult = LegacyQuestionJudgeResult | EvidenceQuestionJudgeResult;
 
 export type FinalAnswerJudgeInput = {
   key_points: JudgeKeyPoint[];
@@ -40,6 +56,7 @@ export type JudgeErrorCode =
   | 'INVALID_JSON'
   | 'SCHEMA_INVALID'
   | 'UNKNOWN_KEY_POINT_ID'
+  | 'UNKNOWN_EVIDENCE_ID'
   | 'LEASE_LOST';
 
 export interface SemanticJudge {

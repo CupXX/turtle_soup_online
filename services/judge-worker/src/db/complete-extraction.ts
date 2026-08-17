@@ -7,7 +7,7 @@ export type CompleteExtractionInput = {
   gameId: string;
   inputVersion: number;
   workerId: string;
-  keyPoints: Array<{ content: string }>;
+  keyPoints: Array<{ content: string; evidence: Array<{ content: string }> }>;
 };
 
 export type CompleteExtractionDependencies = {
@@ -45,7 +45,9 @@ function idFactoryFor(dependencies: CompleteExtractionDependencies): () => strin
   return dependencies.idFactory ?? randomUUID;
 }
 
-function normalizeKeyPoints(keyPoints: CompleteExtractionInput['keyPoints']): string[] {
+type NormalizedKeyPoint = { content: string; evidence: string[] };
+
+function normalizeKeyPoints(keyPoints: CompleteExtractionInput['keyPoints']): NormalizedKeyPoint[] {
   if (keyPoints.length < 3 || keyPoints.length > 5) {
     throw new Error('key points must contain three to five items');
   }
@@ -55,9 +57,21 @@ function normalizeKeyPoints(keyPoints: CompleteExtractionInput['keyPoints']): st
     if (!content || content.length > 2000) {
       throw new Error('key point content is invalid');
     }
-    return content;
+    if (point.evidence.length < 1 || point.evidence.length > 4) {
+      throw new Error('key point evidence must contain one to four items');
+    }
+    const evidence = point.evidence.map(({ content: rawContent }) => {
+      const evidenceContent = rawContent.normalize('NFKC').trim();
+      if (!evidenceContent || evidenceContent.length > 2000) throw new Error('key point evidence content is invalid');
+      return evidenceContent;
+    });
+    const normalizedEvidence = evidence.map((item) => item.toLocaleLowerCase('zh-CN'));
+    if (new Set(normalizedEvidence).size !== normalizedEvidence.length) {
+      throw new Error('key point evidence must be unique');
+    }
+    return { content, evidence };
   });
-  const normalized = contents.map((content) => content.toLocaleLowerCase('zh-CN'));
+  const normalized = contents.map(({ content }) => content.toLocaleLowerCase('zh-CN'));
   if (new Set(normalized).size !== normalized.length) {
     throw new Error('key points must be unique');
   }
@@ -114,12 +128,20 @@ export async function completeExtraction(
     const secret = secrets[0];
     if (!secret || secret.inputVersion !== input.inputVersion) return;
 
-    for (const [index, content] of contents.entries()) {
+    for (const [index, point] of contents.entries()) {
+      const keyPointId = makeId();
       await sql`
         insert into private.key_points
           (id, game_id, ordinal, content, created_at)
-        values (${makeId()}, ${input.gameId}, ${index + 1}, ${content}, now())
+        values (${keyPointId}, ${input.gameId}, ${index + 1}, ${point.content}, now())
       `;
+      for (const [evidenceIndex, content] of point.evidence.entries()) {
+        await sql`
+          insert into private.key_point_evidence
+            (id, key_point_id, ordinal, content, created_at)
+          values (${makeId()}, ${keyPointId}, ${evidenceIndex + 1}, ${content}, now())
+        `;
+      }
     }
 
     await sql`

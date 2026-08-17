@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JudgeVerdict } from '@turtle-soup/contracts';
-import { resolveChallengeVotes, type ChallengeVote } from './challenge.js';
+import { resolveChallengeVotes, resolveEvidenceChallengeVotes, type ChallengeVote } from './challenge.js';
 
 const keyPointIds = ['kp-1', 'kp-2', 'kp-3'];
 
@@ -56,5 +56,21 @@ describe('resolveChallengeVotes', () => {
     expect(() => resolveChallengeVotes([
       vote('YES', ['kp-x']), vote('YES'), vote('YES'), vote('YES'), vote('YES'),
     ], keyPointIds)).toThrow('UNKNOWN_KEY_POINT_ID');
+  });
+});
+
+describe('resolveEvidenceChallengeVotes', () => {
+  it('requires four of five votes to establish an Evidence fact', () => {
+    const votes = [
+      { valid: true, verdict: 'YES' as const, establishedEvidenceIds: ['e-1'] },
+      { valid: true, verdict: 'YES' as const, establishedEvidenceIds: ['e-1'] },
+      { valid: true, verdict: 'YES' as const, establishedEvidenceIds: ['e-1'] },
+      { valid: true, verdict: 'YES' as const, establishedEvidenceIds: ['e-1'] },
+      { valid: true, verdict: 'NO' as const, establishedEvidenceIds: [] },
+    ];
+    expect(resolveEvidenceChallengeVotes(votes, ['e-1'])).toEqual({
+      verdict: 'YES',
+      establishedEvidenceIds: ['e-1'],
+    });
   });
 });
