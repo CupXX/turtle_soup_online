@@ -47,6 +47,7 @@ describe('getCurrentSnapshot', () => {
     expect(snapshot?.stats[0]?.displayNickname).toBe('Cups');
     expect(calls.every((call) => !call.toLowerCase().includes('private.'))).toBe(true);
     expect(calls.every((call) => !call.toLowerCase().includes('insert '))).toBe(true);
+    expect(calls.find((call) => call.toLowerCase().includes('from api.messages'))?.toLowerCase()).toContain('challenge_outcome');
   });
 
   it('maps ended reveal data only for the ended fallback game and preserves sequence order', async () => {

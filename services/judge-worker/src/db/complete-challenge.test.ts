@@ -60,7 +60,21 @@ describe('completeChallenge', () => {
     expect(query).toContain('yes_count');
     expect(query).toContain("status = 'resolved'");
     expect(query).toContain("challenge_status = 'resolved'");
+    expect(query).toContain('challenge_outcome = success');
     expect(query).toContain("status = 'completed'");
+  });
+
+  it('records an upheld outcome when the fresh judgment matches the original judgment', async () => {
+    const fake = fakeTransaction();
+    const matchingJudgments = [1, 2, 3, 4].map((slot) => ({
+      slot,
+      verdict: 'YES' as const,
+      coveredKeyPointIds: [keyPointOne],
+    }));
+
+    await completeChallenge({ actionId, workerId: 'worker-1', challengeId, freshJudgments: matchingJudgments }, { transaction: fake.transaction });
+
+    expect(fake.calls.join('\n').toLowerCase()).toContain('challenge_outcome = upheld');
   });
 
   it('refuses to start an incomplete four-vote reconciliation', async () => {

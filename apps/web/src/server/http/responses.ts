@@ -13,6 +13,7 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   IDEMPOTENCY_CONFLICT: '请求标识已用于不同内容。',
   MESSAGE_NOT_CHALLENGEABLE: '这条问题暂时不能质疑。',
   CHALLENGE_IN_PROGRESS: '这条问题正在质疑中。',
+  CHALLENGE_ALREADY_SUBMITTED: '这条问题已经质疑过了。',
   CHALLENGE_UNAVAILABLE: '质疑服务暂时不可用。',
   INTERNAL_ERROR: '服务器暂时无法完成请求。',
 };

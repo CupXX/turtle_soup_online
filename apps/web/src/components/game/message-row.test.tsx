@@ -48,4 +48,30 @@ describe('MessageRow', () => {
     expect(view.getByRole('button', { name: '质疑 Cups 的问题' })).toHaveProperty('disabled', true);
     expect(view.getByRole('article').getAttribute('data-challenge-status')).toBe('PENDING');
   });
+
+  it('marks a resolved changed judgment as a successful challenge and prevents another challenge', () => {
+    const challengedMessage = {
+      ...message,
+      challengeStatus: 'RESOLVED',
+      challengeOutcome: 'SUCCESS',
+    } as PublicMessage;
+    const view = render(<MessageRow message={challengedMessage} nickname="Cups" />);
+
+    expect(view.getByText('质疑成功')).toBeTruthy();
+    expect(view.getByRole('button', { name: '质疑 Cups 的问题' })).toHaveProperty('disabled', true);
+    expect(view.getByRole('article').getAttribute('data-challenge-outcome')).toBe('SUCCESS');
+  });
+
+  it('marks an unchanged resolved judgment as upheld and prevents another challenge', () => {
+    const challengedMessage = {
+      ...message,
+      challengeStatus: 'RESOLVED',
+      challengeOutcome: 'UPHELD',
+    } as PublicMessage;
+    const view = render(<MessageRow message={challengedMessage} nickname="Cups" />);
+
+    expect(view.getByText('维持原判')).toBeTruthy();
+    expect(view.getByRole('button', { name: '质疑 Cups 的问题' })).toHaveProperty('disabled', true);
+    expect(view.getByRole('article').getAttribute('data-challenge-outcome')).toBe('UPHELD');
+  });
 });

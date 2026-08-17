@@ -25,12 +25,22 @@ export function MessageRow({ message, nickname, isOwn = false, onChallenge }: Me
   const challengeLabel = challengeStatus === 'PENDING'
     ? '质疑中'
     : challengeStatus === 'RESOLVED'
-      ? '已质疑'
+      ? message.challengeOutcome === 'SUCCESS'
+        ? '质疑成功'
+        : message.challengeOutcome === 'UPHELD'
+          ? '维持原判'
+          : '已质疑'
       : challengeStatus === 'FAILED'
         ? '质疑失败'
         : '质疑';
   return (
-    <article className="message-row" data-owner={isOwn ? 'self' : 'other'} data-status={message.status} data-challenge-status={challengeStatus}>
+    <article
+      className="message-row"
+      data-owner={isOwn ? 'self' : 'other'}
+      data-status={message.status}
+      data-challenge-status={challengeStatus}
+      data-challenge-outcome={message.challengeOutcome ?? undefined}
+    >
       <div className="message-meta">
         <span className="message-sequence">#{message.sequenceNo}</span>
         <strong>{nickname}</strong>

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   submitChallenge: vi.fn(),
   getChallengeById: vi.fn(),
   ChallengeInProgressError: class extends Error {},
+  ChallengeAlreadySubmittedError: class extends Error {},
   ChallengeMessageNotFoundError: class extends Error {},
   ChallengeJudgmentUnavailableError: class extends Error {},
 }));
@@ -21,6 +22,7 @@ vi.mock('@/server/game/submit-challenge', () => ({
   submitChallenge: mocks.submitChallenge,
   getChallengeById: mocks.getChallengeById,
   ChallengeInProgressError: mocks.ChallengeInProgressError,
+  ChallengeAlreadySubmittedError: mocks.ChallengeAlreadySubmittedError,
   ChallengeMessageNotFoundError: mocks.ChallengeMessageNotFoundError,
   ChallengeJudgmentUnavailableError: mocks.ChallengeJudgmentUnavailableError,
 }));
@@ -118,5 +120,16 @@ describe('POST /api/game/current/messages/challenge', () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ error: { code: 'CHALLENGE_IN_PROGRESS', retryable: true } });
+  });
+
+  it('maps a repeat challenge to a non-retryable conflict', async () => {
+    validEnv();
+    mocks.claimIdempotency.mockResolvedValue({ kind: 'NEW' });
+    mocks.submitChallenge.mockRejectedValue(new mocks.ChallengeAlreadySubmittedError());
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'CHALLENGE_ALREADY_SUBMITTED', retryable: false } });
   });
 });

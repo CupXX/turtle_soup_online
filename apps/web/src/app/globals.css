@@ -367,6 +367,16 @@ a {
   color: var(--orange);
 }
 
+.message-row[data-challenge-outcome="SUCCESS"] .challenge-button {
+  color: #23845f;
+  font-weight: 800;
+}
+
+.message-row[data-challenge-outcome="UPHELD"] .challenge-button {
+  color: #8a5f4a;
+  font-weight: 800;
+}
+
 .message-row[data-owner="self"] .challenge-button {
   justify-self: end;
 }

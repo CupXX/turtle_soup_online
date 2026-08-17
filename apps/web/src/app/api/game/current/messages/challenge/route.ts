@@ -1,6 +1,7 @@
 import { readPlayerSession } from '@/server/auth/player-session';
 import { getServerEnv } from '@/server/env';
 import {
+  ChallengeAlreadySubmittedError,
   ChallengeInProgressError,
   ChallengeMessageNotFoundError,
   ChallengeJudgmentUnavailableError,
@@ -61,6 +62,7 @@ export async function POST(request: Request): Promise<Response> {
     if (error instanceof InputValidationError) return apiError('VALIDATION_ERROR', 400, false);
     if (error instanceof IdempotencyConflictError) return apiError('IDEMPOTENCY_CONFLICT', 409, false);
     if (error instanceof ChallengeInProgressError) return apiError('CHALLENGE_IN_PROGRESS', 409, true);
+    if (error instanceof ChallengeAlreadySubmittedError) return apiError('CHALLENGE_ALREADY_SUBMITTED', 409, false);
     if (error instanceof ChallengeMessageNotFoundError) return apiError('MESSAGE_NOT_CHALLENGEABLE', 409, false);
     if (error instanceof ChallengeJudgmentUnavailableError) return apiError('CHALLENGE_UNAVAILABLE', 503, true);
     return apiError('INTERNAL_ERROR', 500, true);

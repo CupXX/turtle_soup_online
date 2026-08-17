@@ -1,4 +1,4 @@
-import type { JudgeVerdict } from '@turtle-soup/contracts';
+import type { ChallengeOutcome, JudgeVerdict } from '@turtle-soup/contracts';
 import { resolveChallengeVotes, type ChallengeVote } from '@turtle-soup/game-core';
 import { withWorkerTransaction, type WorkerTransaction } from './client.js';
 
@@ -61,6 +61,10 @@ function uniqueSorted(ids: readonly string[]): string[] {
     if (sorted[index] === sorted[index - 1]) throw new Error('DUPLICATE_KEY_POINT_ID');
   }
   return sorted;
+}
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 function addPoints(target: Map<string, number>, playerId: string, points: number): void {
@@ -152,7 +156,7 @@ export async function completeChallenge(
     `;
     const keyPointIds = keyPoints.map(({ id }) => id);
     const allowed = new Set(keyPointIds);
-    const originalCovered = arrayValue(original.currentCoveredKeyPointIds);
+    const originalCovered = uniqueSorted(arrayValue(original.currentCoveredKeyPointIds));
     const originalVote: ChallengeVote = { valid: true, verdict: original.currentVerdict, coveredKeyPointIds: originalCovered };
     const freshVotes: ChallengeVote[] = input.freshJudgments.map(({ verdict, coveredKeyPointIds }) => ({
       valid: true,
@@ -161,6 +165,10 @@ export async function completeChallenge(
     }));
     const resolution = resolveChallengeVotes([originalVote, ...freshVotes], keyPointIds);
     for (const id of resolution.coveredKeyPointIds) if (!allowed.has(id)) throw new Error('UNKNOWN_KEY_POINT_ID');
+    const challengeOutcome: ChallengeOutcome = resolution.verdict === originalVote.verdict
+      && sameIds(resolution.coveredKeyPointIds, originalCovered)
+      ? 'UPHELD'
+      : 'SUCCESS';
 
     await sql`
       update private.question_judgments
@@ -273,6 +281,7 @@ export async function completeChallenge(
       update api.messages
       set verdict = ${resolution.verdict},
           challenge_status = 'RESOLVED',
+          challenge_outcome = ${challengeOutcome},
           updated_at = now()
       where id = ${message.id} and challenge_status = 'PENDING'
     `;

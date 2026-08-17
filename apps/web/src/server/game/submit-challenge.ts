@@ -32,6 +32,13 @@ export class ChallengeInProgressError extends Error {
   }
 }
 
+export class ChallengeAlreadySubmittedError extends Error {
+  constructor() {
+    super('CHALLENGE_ALREADY_SUBMITTED');
+    this.name = 'ChallengeAlreadySubmittedError';
+  }
+}
+
 export class ChallengeJudgmentUnavailableError extends Error {
   constructor() {
     super('CHALLENGE_UNAVAILABLE');
@@ -156,7 +163,7 @@ export async function submitChallenge(
     const message = messages[0];
     if (!message || message.status !== 'JUDGED' || !message.verdict) throw new ChallengeMessageNotFoundError();
     if (message.challengeStatus === 'PENDING') throw new ChallengeInProgressError();
-    if (message.challengeStatus !== 'NONE') throw new ChallengeMessageNotFoundError();
+    if (message.challengeStatus !== 'NONE') throw new ChallengeAlreadySubmittedError();
 
     const judgments = await sql<JudgmentRow[]>`
       select message_id as "messageId", prompt_version as "promptVersion", schema_version as "schemaVersion"

@@ -109,6 +109,7 @@ export async function getCurrentSnapshot(sql: Sql, _playerId?: string): Promise<
         content,
         status,
         challenge_status as "challengeStatus",
+        challenge_outcome as "challengeOutcome",
         verdict,
         awarded_points as "awardedPoints",
         created_at as "createdAt",

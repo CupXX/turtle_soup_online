@@ -73,6 +73,21 @@ describe('submitChallenge', () => {
       .rejects.toBeInstanceOf(ChallengeInProgressError);
   });
 
+  it('rejects a message that has already been challenged', async () => {
+    const fake = fakeRunner((query) => {
+      const normalized = query.toLowerCase();
+      if (normalized.includes('private.worker_heartbeats')) return [{ lastSeenAt: new Date().toISOString() }];
+      if (normalized.includes('from api.games')) return [{ id: gameId, status: 'ACTIVE' }];
+      if (normalized.includes('from private.game_actions')) return [];
+      if (normalized.includes('from api.messages')) return [{ id: messageId, status: 'JUDGED', verdict: 'YES', challengeStatus: 'RESOLVED' }];
+      return [];
+    });
+
+    await expect(submitChallenge({ playerId, messageId, idempotencyKey, payloadDigest: 'digest' }, { transaction: fake.transaction }))
+      .rejects.toMatchObject({ message: 'CHALLENGE_ALREADY_SUBMITTED' });
+    expect(fake.calls.join('\n').toLowerCase()).not.toContain('insert into private.message_challenges');
+  });
+
   it('rejects a judged message with no complete v6 judgment', async () => {
     const fake = fakeRunner((query) => {
       const normalized = query.toLowerCase();
