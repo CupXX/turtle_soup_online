@@ -17,6 +17,21 @@ export type JudgeVerdict = 'YES' | 'NO' | 'BOTH' | 'IRRELEVANT';
 
 export type Timestamp = string;
 
+export type ProgressSummaryGenerationStatus = 'PENDING' | 'READY' | 'ERROR';
+
+export type PublicGameProgressSummary = {
+  gameId: string;
+  throughQuestionCount: number;
+  throughSequenceNo: number;
+  confirmedFacts: string[];
+  ruledOutFacts: string[];
+  irrelevantTopics: string[];
+  generationStatus: ProgressSummaryGenerationStatus;
+  targetQuestionCount: number | null;
+  generatedAt: Timestamp | null;
+  updatedAt: Timestamp;
+};
+
 export type PublicPlayer = {
   id: string;
   displayNickname: string;
@@ -96,4 +111,5 @@ export type PublicGameSnapshot = {
   events: PublicGameEvent[];
   stats: PublicPlayerStats[];
   reveal: PublicGameReveal | null;
+  progressSummary: PublicGameProgressSummary | null;
 };

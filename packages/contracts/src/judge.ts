@@ -49,6 +49,22 @@ export type FinalAnswerJudgeResult = {
   covered_key_point_ids: string[];
 };
 
+export type ProgressSummarySourceItem = {
+  sequence_no: number;
+  question: string;
+  verdict: JudgeVerdict;
+};
+
+export type ProgressSummaryInput = {
+  questions: ProgressSummarySourceItem[];
+};
+
+export type ProgressSummaryResult = {
+  confirmed_facts: string[];
+  ruled_out_facts: string[];
+  irrelevant_topics: string[];
+};
+
 export type JudgeErrorCode =
   | 'TRANSPORT_ERROR'
   | 'TIMEOUT'
@@ -63,5 +79,6 @@ export interface SemanticJudge {
   extractKeyPoints(input: KeyPointExtractionInput): Promise<KeyPointExtractionResult>;
   judgeQuestion(input: QuestionJudgeInput): Promise<QuestionJudgeResult>;
   judgeFinalAnswer(input: FinalAnswerJudgeInput): Promise<FinalAnswerJudgeResult>;
+  summarizeProgress?(input: ProgressSummaryInput): Promise<ProgressSummaryResult>;
 }
 import type { JudgeVerdict } from './game.js';

@@ -4,6 +4,7 @@ import type {
   FinalAnswerJudgeResult,
   KeyPointExtractionResult,
   LegacyQuestionJudgeResult,
+  ProgressSummaryResult,
   QuestionJudgeResult,
 } from '@turtle-soup/contracts';
 
@@ -84,6 +85,29 @@ export const FINAL_ANSWER_JUDGE_SCHEMA = {
   },
 } as const;
 
+export const PROGRESS_SUMMARY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['confirmed_facts', 'ruled_out_facts', 'irrelevant_topics'],
+  properties: {
+    confirmed_facts: {
+      type: 'array',
+      maxItems: 4,
+      items: { type: 'string', minLength: 1, maxLength: 120 },
+    },
+    ruled_out_facts: {
+      type: 'array',
+      maxItems: 4,
+      items: { type: 'string', minLength: 1, maxLength: 120 },
+    },
+    irrelevant_topics: {
+      type: 'array',
+      maxItems: 4,
+      items: { type: 'string', minLength: 1, maxLength: 120 },
+    },
+  },
+} as const;
+
 export class JudgeValidationError extends Error {
   constructor(
     public readonly code: 'INVALID_JSON' | 'SCHEMA_INVALID' | 'UNKNOWN_KEY_POINT_ID' | 'UNKNOWN_EVIDENCE_ID',
@@ -99,6 +123,7 @@ const extractionValidator = ajv.compile(KEY_POINT_EXTRACTION_SCHEMA);
 const questionValidator = ajv.compile(QUESTION_JUDGE_SCHEMA);
 const evidenceQuestionValidator = ajv.compile(EVIDENCE_QUESTION_JUDGE_SCHEMA);
 const finalAnswerValidator = ajv.compile(FINAL_ANSWER_JUDGE_SCHEMA);
+const progressSummaryValidator = ajv.compile(PROGRESS_SUMMARY_SCHEMA);
 
 function parseResult(value: unknown): unknown {
   if (typeof value !== 'string') return value;
@@ -126,6 +151,15 @@ function assertUniqueContents(result: KeyPointExtractionResult): void {
     const evidence = point.evidence.map(({ content }) => content.normalize('NFKC').toLocaleLowerCase('zh-CN'));
     if (new Set(evidence).size !== evidence.length) {
       throw new JudgeValidationError('SCHEMA_INVALID', 'Evidence contents must be unique within a key point');
+    }
+  }
+}
+
+function assertUniqueProgressSummaryContents(result: ProgressSummaryResult): void {
+  for (const facts of [result.confirmed_facts, result.ruled_out_facts, result.irrelevant_topics]) {
+    const normalized = facts.map((fact) => fact.normalize('NFKC').toLocaleLowerCase('zh-CN'));
+    if (new Set(normalized).size !== normalized.length) {
+      throw new JudgeValidationError('SCHEMA_INVALID', 'progress summary facts must be unique within each category');
     }
   }
 }
@@ -170,5 +204,11 @@ export function validateFinalAnswerResult(
 ): FinalAnswerJudgeResult {
   const result = validate<FinalAnswerJudgeResult>(value, finalAnswerValidator);
   assertAllowedIds(result.covered_key_point_ids, allowedKeyPointIds);
+  return result;
+}
+
+export function validateProgressSummaryResult(value: unknown): ProgressSummaryResult {
+  const result = validate<ProgressSummaryResult>(value, progressSummaryValidator);
+  assertUniqueProgressSummaryContents(result);
   return result;
 }

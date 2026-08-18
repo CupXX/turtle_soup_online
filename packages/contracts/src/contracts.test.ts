@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import extractionSchema from '../schemas/key-point-extraction-result.schema.json' with { type: 'json' };
 import finalAnswerSchema from '../schemas/final-answer-judge-result.schema.json' with { type: 'json' };
 import questionSchema from '../schemas/question-judge-result.schema.json' with { type: 'json' };
+import type { PublicGameProgressSummary, PublicGameSnapshot } from './game.js';
+import type { ProgressSummaryInput, ProgressSummaryResult } from './judge.js';
 
 describe('canonical judge schemas', () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
@@ -34,5 +36,33 @@ describe('canonical judge schemas', () => {
         ],
       }),
     ).toBe(true);
+  });
+
+  it('exposes the public progress summary and public-only judge input contracts', () => {
+    const summary: PublicGameProgressSummary = {
+      gameId: 'game-1',
+      throughQuestionCount: 10,
+      throughSequenceNo: 12,
+      confirmedFacts: ['男人杀死了自己的妻子。'],
+      ruledOutFacts: [],
+      irrelevantTopics: [],
+      generationStatus: 'READY',
+      targetQuestionCount: null,
+      generatedAt: '2026-08-18T00:00:00.000Z',
+      updatedAt: '2026-08-18T00:00:00.000Z',
+    };
+    const input: ProgressSummaryInput = {
+      questions: [{ sequence_no: 1, question: '问题', verdict: 'YES' }],
+    };
+    const result: ProgressSummaryResult = {
+      confirmed_facts: ['事实'],
+      ruled_out_facts: [],
+      irrelevant_topics: [],
+    };
+    const snapshot = { progressSummary: summary } as Pick<PublicGameSnapshot, 'progressSummary'>;
+
+    expect(snapshot.progressSummary).toEqual(summary);
+    expect(input.questions[0]).toEqual({ sequence_no: 1, question: '问题', verdict: 'YES' });
+    expect(result).toEqual({ confirmed_facts: ['事实'], ruled_out_facts: [], irrelevant_topics: [] });
   });
 });
