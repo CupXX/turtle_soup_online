@@ -19,14 +19,31 @@ const message: PublicMessage = {
 };
 
 describe('MessageRow', () => {
-  it('keeps reaction and points beside the original message', () => {
+  it('keeps the verdict and one key-point thumb beside the original message', () => {
     const onChallenge = vi.fn();
     render(<MessageRow message={message} nickname="Cups" onChallenge={onChallenge} />);
 
     expect(screen.getByText('他是不是因为误会而离开？')).toBeTruthy();
     expect(screen.getByText('✅')).toBeTruthy();
-    expect(screen.getByText('+1')).toBeTruthy();
+    expect(screen.getByText('👍')).toBeTruthy();
+    expect(screen.queryByText('+1')).toBeNull();
+    const reactionLine = screen.getByText('✅').closest('.reaction-line');
+    expect(reactionLine?.textContent).toBe('✅👍');
+    expect(screen.getByRole('article').querySelector('.message-result')?.getAttribute('aria-label')).toBe('判定 YES，触发 1 个关键点');
     expect(screen.getByRole('button', { name: '质疑 Cups 的问题' })).toBeTruthy();
+  });
+
+  it('renders exactly two thumbs for two awarded key points and none for zero', () => {
+    const view = render(<MessageRow message={{ ...message, awardedPoints: 2 }} nickname="Cups" />);
+
+    expect(view.getByText('👍👍')).toBeTruthy();
+    expect(view.queryByText('+2')).toBeNull();
+    expect(view.getByRole('article').querySelector('.message-result')?.getAttribute('aria-label')).toBe('判定 YES，触发 2 个关键点');
+
+    view.rerender(<MessageRow message={{ ...message, awardedPoints: 0 }} nickname="Cups" />);
+    expect(view.queryByText('👍')).toBeNull();
+    expect(view.queryByText('+0')).toBeNull();
+    expect(view.getByRole('article').querySelector('.message-result')?.getAttribute('aria-label')).toBe('判定 YES');
   });
 
   it('marks own and other messages without separating the reaction from the bubble', () => {

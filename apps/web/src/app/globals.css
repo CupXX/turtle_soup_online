@@ -348,10 +348,15 @@ a {
   line-height: 1;
 }
 
-.points {
-  color: #b04c2b;
-  font-size: .78rem;
-  font-weight: 800;
+.reaction-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.key-point-hits {
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .challenge-button,

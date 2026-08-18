@@ -46,9 +46,18 @@ export function MessageRow({ message, nickname, isOwn = false, onChallenge }: Me
         <strong>{nickname}</strong>
       </div>
       <p className="message-body">{message.content}</p>
-      <div className="message-result" aria-label={judged ? `判定 ${message.verdict}` : statusText(message)}>
-        <span className="reaction" aria-hidden={judged ? undefined : true}>{statusText(message)}</span>
-        {message.awardedPoints > 0 ? <span className="points">+{message.awardedPoints}</span> : null}
+      <div
+        className="message-result"
+        aria-label={judged
+          ? `判定 ${message.verdict}${message.awardedPoints > 0 ? `，触发 ${message.awardedPoints} 个关键点` : ''}`
+          : statusText(message)}
+      >
+        <span className="reaction-line">
+          <span className="reaction" aria-hidden={judged ? undefined : true}>{statusText(message)}</span>
+          {message.awardedPoints > 0 ? (
+            <span className="key-point-hits" aria-hidden="true">{'👍'.repeat(message.awardedPoints)}</span>
+          ) : null}
+        </span>
       </div>
       <button
         className="challenge-button"
