@@ -59,6 +59,28 @@ describe('submitChallenge', () => {
       .toBeLessThan(fake.calls.findIndex((call) => call.toLowerCase().includes("action_type, status")));
   });
 
+  it('accepts a complete v7 evidence judgment for challenge', async () => {
+    const fake = fakeRunner((query) => {
+      const normalized = query.toLowerCase();
+      if (normalized.includes('private.worker_heartbeats')) return [{ lastSeenAt: new Date().toISOString() }];
+      if (normalized.includes('from api.games')) return [{ id: gameId, status: 'ACTIVE' }];
+      if (normalized.includes('from private.game_actions')) return [];
+      if (normalized.includes('count(*)')) return [{ missingCount: 0 }];
+      if (normalized.includes('from api.messages')) return [{ id: messageId, gameId, playerId: '00000000-0000-4000-8000-000000000006', status: 'JUDGED', verdict: 'YES', challengeStatus: 'NONE' }];
+      if (normalized.includes('from private.question_judgments')) return [{ messageId, promptVersion: 'question-judge-v7', schemaVersion: 'judge-schema-v2' }];
+      if (normalized.includes('from private.message_challenges')) return [{ id: challengeId, messageId, status: 'PENDING' }];
+      return [];
+    });
+
+    await expect(submitChallenge({ playerId, messageId, idempotencyKey, payloadDigest: 'digest' }, {
+      transaction: fake.transaction,
+    })).resolves.toEqual({ challengeId, messageId, status: 'PENDING' });
+
+    const query = fake.calls.join('\n').toLowerCase();
+    expect(query).toContain("prompt_version = 'question-judge-v7'");
+    expect(query).toContain("schema_version = 'judge-schema-v2'");
+  });
+
   it('rejects an already pending challenge', async () => {
     const fake = fakeRunner((query) => {
       const normalized = query.toLowerCase();

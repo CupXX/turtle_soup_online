@@ -242,13 +242,20 @@ async function main() {
     const summaryInputs = [];
     const judge = {
       async extractKeyPoints() {
-        return { key_points: [{ content: '伞柄藏着门票' }, { content: '门票属于失踪者' }, { content: '雨夜没有脚印' }] };
+        return {
+          key_points: [
+            { content: '伞柄藏着门票', evidence: [{ content: '伞柄内藏有门票' }] },
+            { content: '门票属于失踪者', evidence: [{ content: '门票登记在失踪者名下' }] },
+            { content: '雨夜没有脚印', evidence: [{ content: '现场没有脚印' }] },
+          ],
+        };
       },
       async judgeQuestion(input) {
         const hit = input.current_message.includes('门票');
+        const evidenceId = input.key_points[0]?.evidence?.[0]?.id;
         return {
           verdict: hit ? 'YES' : 'NO',
-          fully_covered_key_point_ids: hit ? [input.key_points[0].id] : [],
+          established_evidence_ids: hit && evidenceId ? [evidenceId] : [],
         };
       },
       async judgeFinalAnswer(input) {
@@ -343,7 +350,7 @@ async function main() {
     }
     for (let index = 3; index <= 10; index += 1) {
       const action = await worker.claimNextAction('acceptance-worker', new Date(), { transaction });
-      assert(action && action.actionType === 'QUESTION' && Number(action.sequenceNo) === index, `worker did not claim boundary question ${index}`);
+      assert(action && action.actionType === 'NORMAL_MESSAGE' && Number(action.sequenceNo) === index, `worker did not claim boundary question ${index}`);
       await worker.processQuestion(action, { judge, workerId: 'acceptance-worker', sql, transaction });
     }
     log('ten questions judged');
@@ -353,13 +360,13 @@ async function main() {
     assert(boundarySnapshot.messages.slice(0, 10).every((message) => message.status === 'JUDGED'), 'boundary questions were not all judged');
     const boundaryJob = await worker.claimNextProgressSummary('acceptance-worker', new Date(), { transaction });
     assert(boundaryJob, 'worker did not claim boundary-10 progress summary job');
-    assert(boundaryJob.throughQuestionCount === 10 && boundaryJob.throughSequenceNo === 10, 'boundary-10 job target mismatch');
+    assert(Number(boundaryJob.throughQuestionCount) === 10 && Number(boundaryJob.throughSequenceNo) === 10, 'boundary-10 job target mismatch');
     await worker.processProgressSummary(boundaryJob, { judge, workerId: 'acceptance-worker', sql, transaction });
 
     const readyBoundarySnapshot = await apiRequest('/api/game/current');
     const readyBoundarySummary = readyBoundarySnapshot.progressSummary;
     assert(readyBoundarySummary?.generationStatus === 'READY', 'boundary-10 progress summary is not READY');
-    assert(readyBoundarySummary.throughQuestionCount === 10 && readyBoundarySummary.throughSequenceNo === 10, 'boundary-10 public summary target mismatch');
+    assert(Number(readyBoundarySummary.throughQuestionCount) === 10 && Number(readyBoundarySummary.throughSequenceNo) === 10, 'boundary-10 public summary target mismatch');
     assert(readyBoundarySummary.confirmedFacts.length + readyBoundarySummary.ruledOutFacts.length + readyBoundarySummary.irrelevantTopics.length > 0, 'boundary-10 summary is empty');
     assert(summaryInputs.length === 1, 'boundary-10 summary did not call the fake summarizer exactly once');
     assert(Object.keys(summaryInputs[0]).join(',') === 'questions', 'summary input contains non-public top-level fields');
@@ -381,7 +388,7 @@ async function main() {
     const challengeJudge = {
       ...judge,
       async judgeQuestion() {
-        return { verdict: 'NO', fully_covered_key_point_ids: [] };
+        return { verdict: 'NO', established_evidence_ids: [] };
       },
     };
     await worker.processChallenge(challengeAction, {
@@ -394,7 +401,7 @@ async function main() {
 
     const refreshedJob = await worker.claimNextProgressSummary('acceptance-worker', new Date(), { transaction });
     assert(refreshedJob, 'worker did not claim challenge refresh progress summary job');
-    assert(refreshedJob.throughQuestionCount === 10 && refreshedJob.throughSequenceNo === 10, 'challenge refresh target mismatch');
+    assert(Number(refreshedJob.throughQuestionCount) === 10 && Number(refreshedJob.throughSequenceNo) === 10, 'challenge refresh target mismatch');
     assert(refreshedJob.sourceFingerprint !== boundaryJob.sourceFingerprint, 'challenge did not produce a new source fingerprint');
     await worker.processProgressSummary(refreshedJob, { judge, workerId: 'acceptance-worker', sql, transaction });
 

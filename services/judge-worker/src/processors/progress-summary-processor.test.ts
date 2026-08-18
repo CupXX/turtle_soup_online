@@ -82,6 +82,33 @@ describe('processProgressSummary', () => {
     expect(writes.calls.join('\n').toLowerCase()).toContain("status = 'ready'");
   });
 
+  it('accepts a bigint sequence value returned as a string by postgres', async () => {
+    const read = fakeRead(sourceRows);
+    const writes = fakeTransaction([
+      [{ id: jobId, gameId, throughQuestionCount: 10, throughSequenceNo: '10', sourceFingerprint, status: 'PROCESSING', leaseOwner: 'worker-1', leaseExpiresAt: '2099-01-01T00:00:00.000Z' }],
+      sourceRows,
+      [],
+      [],
+    ]);
+    let judged = false;
+    const judge: SemanticJudge = {
+      extractKeyPoints: async () => ({ key_points: [] }),
+      judgeQuestion: async () => ({ verdict: 'NO', fully_covered_key_point_ids: [] }),
+      judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+      summarizeProgress: async () => { judged = true; return result; },
+    };
+
+    await processProgressSummary({ ...job, throughSequenceNo: '10' as unknown as number }, {
+      judge,
+      workerId: 'worker-1',
+      sql: read.sql,
+      transaction: writes.transaction,
+    });
+
+    expect(judged).toBe(true);
+    expect(writes.calls.join('\n').toLowerCase()).toContain("status = 'ready'");
+  });
+
   it('marks a changed source stale, ensures replacement, and never calls the model', async () => {
     const readRows = sourceRows.map((row, index) => index === 3 ? { ...row, verdict: 'BOTH' as const } : row);
     const read = fakeRead(readRows);

@@ -15,7 +15,7 @@
     "benchmark:mosquito:25": "node --env-file=.env.local --import tsx services/judge-worker/benchmarks/mosquito-question-judge-live.ts",
     "benchmark:all-choices:30": "node --env-file=.env.local --import tsx services/judge-worker/benchmarks/all-choices-correct-question-judge-live.ts",
     "benchmark:key-points:v3": "node --env-file=.env.local --import tsx services/judge-worker/benchmarks/key-point-extraction-v3-live.ts",
-    "verify:first-playable-loop": "node scripts/verify-first-playable-loop.mjs"
+    "verify:first-playable-loop": "node --import tsx scripts/verify-first-playable-loop.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

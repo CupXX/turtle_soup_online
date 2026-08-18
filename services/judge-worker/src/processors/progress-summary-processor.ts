@@ -38,7 +38,7 @@ export async function processProgressSummary(
 ): Promise<void> {
   const sql = dependencies.sql ?? getWorkerDb();
   const source = await loadProgressSummaryBoundary(sql, job.gameId, job.throughQuestionCount);
-  if (source.sourceFingerprint !== job.sourceFingerprint || source.throughSequenceNo !== job.throughSequenceNo) {
+  if (source.sourceFingerprint !== job.sourceFingerprint || source.throughSequenceNo !== Number(job.throughSequenceNo)) {
     await markProgressSummaryStale(job, {
       transaction: dependencies.transaction,
       now: dependencies.now,

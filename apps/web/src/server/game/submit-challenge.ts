@@ -171,15 +171,17 @@ export async function submitChallenge(
       where message_id = ${message.id}
         and game_id = ${game.id}
         and player_id = ${message.playerId}
-        and prompt_version = 'question-judge-v6'
-        and schema_version = 'judge-schema-v1'
+      and (
+        (prompt_version = 'question-judge-v6' and schema_version = 'judge-schema-v1')
+        or (prompt_version = 'question-judge-v7' and schema_version = 'judge-schema-v2')
+      )
       limit 1
     `;
     if (!judgments[0]) throw new ChallengeMessageNotFoundError();
 
-    // Rebuilding first-hit claims is only safe when every judged message in
-    // the game has the immutable v6 coverage record. Legacy rows are not
-    // inferred or silently re-scored during a challenge.
+    // Rebuilding public claims is only safe when every judged message in the
+    // game has a complete supported v6 coverage or v7 evidence record. Rows
+    // without one of those records are not inferred or silently re-scored.
     const missingJudgments = await sql<MissingJudgmentRow[]>`
       select count(*)::integer as "missingCount"
       from api.messages messages
@@ -190,8 +192,10 @@ export async function submitChallenge(
           from private.question_judgments judgments
           where judgments.message_id = messages.id
             and judgments.game_id = messages.game_id
-            and judgments.prompt_version = 'question-judge-v6'
-            and judgments.schema_version = 'judge-schema-v1'
+            and (
+              (judgments.prompt_version = 'question-judge-v6' and judgments.schema_version = 'judge-schema-v1')
+              or (judgments.prompt_version = 'question-judge-v7' and judgments.schema_version = 'judge-schema-v2')
+            )
         )
     `;
     if (Number(missingJudgments[0]?.missingCount ?? 0) > 0) throw new ChallengeMessageNotFoundError();
