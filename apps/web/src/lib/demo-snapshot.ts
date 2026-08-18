@@ -87,4 +87,5 @@ export const demoSnapshot: PublicGameSnapshot = {
     },
   ],
   reveal: null,
+  progressSummary: null,
 };

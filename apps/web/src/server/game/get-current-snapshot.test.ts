@@ -88,4 +88,41 @@ describe('getCurrentSnapshot', () => {
 
     await expect(getCurrentSnapshot(sql)).resolves.toBeNull();
   });
+
+  it.each([
+    'PENDING',
+    'ERROR',
+  ] as const)('maps a %s summary row while preserving the last successful facts', async (generationStatus) => {
+    const { sql } = fakeSql([
+      { match: 'from api.games', rows: [{ ...waitingGame, status: 'ACTIVE', puzzleSurface: '公开汤面', activatedAt: waitingGame.createdAt }] },
+      { match: 'from api.game_player_stats', rows: [] },
+      { match: 'from api.players', rows: [] },
+      { match: 'from api.messages', rows: [] },
+      { match: 'from api.game_events', rows: [] },
+      {
+        match: 'from api.game_progress_summaries',
+        rows: [{
+          gameId: waitingGame.id,
+          throughQuestionCount: 10,
+          throughSequenceNo: 12,
+          confirmedFacts: ['已确认的旧事实'],
+          ruledOutFacts: ['已排除的旧事实'],
+          irrelevantTopics: ['无关方向'],
+          generationStatus,
+          targetQuestionCount: 20,
+          generatedAt: '2026-08-14T12:10:00.000Z',
+          updatedAt: '2026-08-14T12:11:00.000Z',
+        }],
+      },
+    ]);
+
+    const snapshot = await getCurrentSnapshot(sql);
+
+    expect(snapshot?.progressSummary).toMatchObject({
+      throughQuestionCount: 10,
+      confirmedFacts: ['已确认的旧事实'],
+      generationStatus,
+      targetQuestionCount: 20,
+    });
+  });
 });

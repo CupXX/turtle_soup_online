@@ -14,6 +14,7 @@ import type { GameMessage } from './message-row';
 import { NicknameGate } from './nickname-gate';
 import { PlayerStatsPanel } from './player-stats-panel';
 import { PuzzlePanel } from './puzzle-panel';
+import { ProgressSummaryPanel } from './progress-summary-panel';
 
 type MessageSubmitResult = PublicMessage | null | void;
 type FinalAnswerResult = FinalAnswerReceipt | 'FAILED' | 'SUCCEEDED' | void;
@@ -249,11 +250,7 @@ export function GameClient({
           </div>
           <aside className="dashboard-sidebar">
             <PlayerStatsPanel stats={snapshot.stats} />
-            <section className="sidebar-card progress-placeholder" aria-label="当前进度">
-              <p className="eyebrow">当前进度</p>
-              <strong>即将加入</strong>
-              <p className="muted">这里将展示本局的整体推进状态。</p>
-            </section>
+            <ProgressSummaryPanel messages={visibleMessages} summary={snapshot.progressSummary} />
           </aside>
         </div>
       </div>

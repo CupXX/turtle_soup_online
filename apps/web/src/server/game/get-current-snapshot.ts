@@ -1,6 +1,7 @@
 import type {
   PublicGame,
   PublicGameEvent,
+  PublicGameProgressSummary,
   PublicGameReveal,
   PublicGameSnapshot,
   PublicMessage,
@@ -79,7 +80,7 @@ export async function getCurrentSnapshot(sql: Sql, _playerId?: string): Promise<
   if (!row) return null;
 
   const game = publicGame(row);
-  const [stats, messages, events] = await Promise.all([
+  const [stats, messages, events, progressSummaryRows] = await Promise.all([
     sql<PlayerStatsRow[]>`
       select
         stats.game_id as "gameId",
@@ -132,6 +133,22 @@ export async function getCurrentSnapshot(sql: Sql, _playerId?: string): Promise<
       where game_id = ${game.id}
       order by sequence_no asc
     `,
+    sql<PublicGameProgressSummary[]>`
+      select
+        game_id as "gameId",
+        through_question_count as "throughQuestionCount",
+        through_sequence_no as "throughSequenceNo",
+        confirmed_facts as "confirmedFacts",
+        ruled_out_facts as "ruledOutFacts",
+        irrelevant_topics as "irrelevantTopics",
+        generation_status as "generationStatus",
+        target_question_count as "targetQuestionCount",
+        generated_at as "generatedAt",
+        updated_at as "updatedAt"
+      from api.game_progress_summaries
+      where game_id = ${game.id}
+      limit 1
+    `,
   ]);
 
   let reveal: PublicGameReveal | null = null;
@@ -167,5 +184,6 @@ export async function getCurrentSnapshot(sql: Sql, _playerId?: string): Promise<
     events: events.slice().sort(bySequence),
     stats: stats.map(({ id: _id, createdAt: _createdAt, ...playerStats }) => playerStats),
     reveal,
+    progressSummary: progressSummaryRows[0] ?? null,
   };
 }

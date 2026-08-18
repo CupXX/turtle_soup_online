@@ -13,6 +13,7 @@ const activeSnapshot = {
   },
   players: [{ id: 'p1', displayNickname: 'Cups', lifetimeScore: 2, createdAt: '' }],
   messages: [], events: [], stats: [], reveal: null,
+  progressSummary: null,
 } as PublicGameSnapshot;
 
 afterEach(() => {
@@ -85,6 +86,7 @@ describe('GameClient', () => {
     expect(screen.queryByText('按服务器顺序')).toBeNull();
     expect(screen.getByText(/关键点已发现/)).toBeTruthy();
     expect(screen.getByText('当前进度')).toBeTruthy();
+    expect(screen.queryByText('即将加入')).toBeNull();
     expect(screen.queryByRole('link', { name: '管理入口' })).toBeNull();
     expect(screen.getByText('在线多人AI海龟汤游戏')).toBeTruthy();
     expect(screen.getByRole('button', { name: '提交正答' })).toBeTruthy();

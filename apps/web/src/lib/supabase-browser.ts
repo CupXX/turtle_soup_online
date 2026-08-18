@@ -31,6 +31,7 @@ function subscribeToPublicTables(client: BrowserSupabase, gameId: string, onInva
     .on('postgres_changes', { event: '*', schema: 'api', table: 'messages', filter: `game_id=eq.${gameId}` }, onInvalidate)
     .on('postgres_changes', { event: '*', schema: 'api', table: 'game_events', filter: `game_id=eq.${gameId}` }, onInvalidate)
     .on('postgres_changes', { event: '*', schema: 'api', table: 'game_player_stats', filter: `game_id=eq.${gameId}` }, onInvalidate)
+    .on('postgres_changes', { event: '*', schema: 'api', table: 'game_progress_summaries', filter: `game_id=eq.${gameId}` }, onInvalidate)
     .subscribe((status) => onStatus(toConnectionStatus(status)));
 
   return {

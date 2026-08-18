@@ -529,6 +529,57 @@ thead th {
   line-height: 1.6;
 }
 
+.progress-summary-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.progress-summary-panel .section-heading {
+  align-items: flex-start;
+}
+
+.progress-summary-panel h2 {
+  font-size: 1.15rem;
+}
+
+.progress-summary-status {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.progress-summary-countdown {
+  margin: -5px 0 0;
+}
+
+.progress-summary-facts {
+  display: grid;
+  gap: 12px;
+}
+
+.progress-summary-group {
+  display: grid;
+  gap: 5px;
+}
+
+.progress-summary-group h3 {
+  margin: 0;
+  color: var(--teal-dark);
+  font-size: .78rem;
+  letter-spacing: .03em;
+}
+
+.progress-summary-group ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink);
+  font-size: .86rem;
+  line-height: 1.45;
+}
+
 .reveal-panel {
   border-color: #d6c8a4;
   background: #fffaf0;
