@@ -9,36 +9,39 @@ Approved feature design for the right-sidebar **“当前进度”** module.
 - Repository: `CupXX/turtle_soup_online`
 - Branch: `main`
 - Code baseline: `88382241598da3c6a3d452f6586eac4b03b3bf9a`
-- Planning-doc commits added after this baseline do not count as code drift.
+- Planning-doc commits after that baseline are documentation-only and do not count as code drift.
 
 If implementation starts from a later code commit, compare only code changes after this baseline that touch the files or invariants named below.
 
 ## Goal
 
-Replace the current right-sidebar placeholder with a cumulative, AI-written progress summary that helps players remember what the group has already established.
+Replace the right-sidebar placeholder with a cumulative AI-written progress summary that helps players remember what the group has already established.
 
-The summary updates after every 10 **judged normal questions** and organizes explored information into natural-language facts in three categories:
+The summary updates at every 10 **judged normal questions** and organizes current explored knowledge into three natural-language groups:
 
-1. facts currently supported by YES judgments;
-2. propositions currently ruled out by NO judgments;
-3. topics currently judged IRRELEVANT.
+1. `YES` → facts currently supported;
+2. `NO` → propositions currently ruled out;
+3. `IRRELEVANT` → directions/topics currently known to be unrelated.
 
-The feature must never reveal solution-only information, hidden key points, or hidden Evidence. It summarizes only information that is already recoverable from public question text plus the current public verdict.
+`BOTH` remains visible in the message feed but does not produce a summary fact in V1.
+
+The Worker must also reconcile an already-running game at startup. If an ACTIVE game already has at least 10 judged questions but lacks the current eligible summary, startup immediately enqueues the most recent 10-question boundary. Example: **41 judged questions → ensure a summary through question 40**.
 
 ## Non-goals
 
-- Do not change YES / NO / BOTH / IRRELEVANT semantics.
-- Do not change key-point extraction, Evidence discovery, scoring, hit rate, or final-answer behavior.
-- Do not count `FINAL_ANSWER` or `CHALLENGE` actions toward the 10-question cadence.
-- Do not summarize unjudged `PENDING` messages.
-- Do not use `full_solution`, private key points, private Evidence, key-point claims, or award data as summary input.
-- Do not add manual player editing, admin editing, summary history navigation, or per-player summaries.
+- Do not change verdict semantics.
+- Do not change key-point extraction, cumulative Evidence, scoring, hit rate, challenge voting, or final-answer behavior.
+- Do not count `FINAL_ANSWER` or `CHALLENGE` actions toward the cadence.
+- Do not summarize PENDING / ERROR / CANCELLED messages.
+- Do not use `full_solution`, private key points, private Evidence, claims, awards, or scores as summary input.
+- Do not add manual player/admin editing, history navigation, or per-player summaries.
 - Do not generate a special final summary when the game ends.
-- V1 does not convert `BOTH` into a progress fact. BOTH questions remain visible in the message feed but are omitted from the generated progress summary because forcing them into positive/negative categories risks overstating ambiguous information.
+- Startup reconciliation applies only to the current ACTIVE game; it does not backfill ENDED history.
+- A BLOCKED/ERROR summary for the exact same source state is not automatically retried merely because the Worker restarts.
 
 ## Existing architecture and constraints
 
-The current game client already reserves the location for this feature in `apps/web/src/components/game/game-client.tsx`:
+The current UI already reserves the target slot in `apps/web/src/components/game/game-client.tsx`:
 
 ```tsx
 <section className="sidebar-card progress-placeholder" aria-label="当前进度">
@@ -48,136 +51,178 @@ The current game client already reserves the location for this feature in `apps/
 </section>
 ```
 
-`PublicGameSnapshot` currently contains game, players, messages, events, stats, and reveal. `getCurrentSnapshot()` assembles that snapshot on the server, and browser Realtime invalidates the snapshot when selected `api` tables change.
+`PublicGameSnapshot` is assembled by `apps/web/src/server/game/get-current-snapshot.ts`; browser Realtime invalidates snapshots when subscribed `api` tables change.
 
-Normal-question receipt increments `api.games.total_question_count` when a question is submitted. That field is **not** the summary trigger because it includes questions that may still be pending. Summary cadence is based on the number of `api.messages` rows that have reached `status = 'JUDGED'`.
+`api.games.total_question_count` increments at receipt time and therefore includes pending questions. It is **not** authoritative for summary cadence. Cadence uses only `api.messages` rows whose current status is `JUDGED`.
 
-The serial Worker currently processes key-point extraction jobs and game actions. Game actions are a strict ordered queue for `NORMAL_MESSAGE`, `FINAL_ANSWER`, and `CHALLENGE`; summary work must not be represented as a fake player action or alter that action-type contract.
+The Worker currently has key-point extraction jobs plus the strict ordered `private.game_actions` queue (`NORMAL_MESSAGE`, `FINAL_ANSWER`, `CHALLENGE`). Progress-summary work must remain a separate queue and must not add a fake player action type.
 
-Challenge resolution updates the current public verdict and can rebuild key-point progress. Because a challenge can change a verdict already represented in a published summary, the summary layer must support refreshing an existing 10-question boundary.
+Challenge resolution can change the current verdict of a previously summarized question, so summary jobs need same-boundary regeneration without publishing stale output.
 
 ## User-visible behavior
 
-### Before the first summary
+### 0–9 judged questions
 
-For 0–9 judged questions, the “当前进度” card shows no AI-generated facts. It shows lightweight progress copy such as:
+The card contains no generated facts.
+
+Example:
 
 - title: `当前进度`
 - state: `还在探索中`
 - helper: `再完成 7 个问题后整理首次总结`
 
-The countdown is derived from the number of currently judged messages, not submitted questions.
+The countdown is derived from judged public messages.
 
-### At question 10, 20, 30, ...
+### Question 10, 20, 30, ...
 
-When the Nth judged normal question completes and `N % 10 === 0`, the Worker schedules a cumulative summary through question N.
+When judged count reaches a positive multiple of 10, the Worker ensures a summary job for that boundary.
 
-The summary uses all judged normal questions from the start of the game through that boundary, in message sequence order. It does **not** summarize only the newest batch of ten and does not recursively summarize a previous AI summary. Rebuilding from the public judgments prevents error accumulation.
+A summary through question N always rebuilds from the first N **current judged public questions** in sequence order. It does not use only the newest ten and never recursively summarizes an earlier AI summary.
 
-Example output shape:
+Example model output:
 
 ```json
 {
-  "confirmed_facts": [
-    "死者的死亡与她扔出去的物体有关。"
-  ],
-  "ruled_out_facts": [
-    "这不是一起自杀。"
-  ],
-  "irrelevant_topics": [
-    "天气与事件原因无关。"
-  ]
+  "confirmed_facts": ["男人杀死了自己的妻子。"],
+  "ruled_out_facts": ["这不是一起自杀。"],
+  "irrelevant_topics": ["天气因素与事件无关。"]
 }
 ```
 
-The UI renders these as short natural-language groups, not as copied question/verdict pairs. Empty categories are omitted.
+The sidebar renders short natural-language groups and omits empty categories.
 
-The card also shows `整理至第 N 问` and, when READY, `再完成 X 个问题后更新`.
+### Startup reconciliation / backfill
 
-### While a refresh is pending
+On every Worker process startup, after the initial heartbeat and before the normal work loop, run one reconciliation pass:
 
-If there is no previous successful summary, show `正在整理当前进度…`.
+1. Find the current ACTIVE game. If none exists, no-op.
+2. Read its `JUDGED` messages in sequence order.
+3. Compute:
 
-If an older successful summary exists, keep it visible and add a muted `正在更新…` status. Do not blank the last known-good summary while a new one is generated.
+```text
+judgedCount = number of JUDGED messages
+latestBoundary = floor(judgedCount / 10) * 10
+```
 
-### If generation fails after retries
+4. If `latestBoundary < 10`, no-op.
+5. Use the Nth judged message (`N = latestBoundary`) as `through_sequence_no`.
+6. Build the canonical public input for exactly the first N judged messages and calculate its `source_fingerprint`.
+7. Ensure a job exists for `(game_id, latestBoundary, source_fingerprint)` unless the public summary already represents that exact source state.
 
-Keep the last successful summary. Set a safe public state to ERROR and show muted copy such as `本轮总结暂时未更新`.
+Examples:
 
-Do not expose provider names, model errors, retry counts, stack traces, queue IDs, or error codes to the browser.
+- 9 judged → no backfill.
+- 10 judged, no summary/job → enqueue 10.
+- 19 judged, no summary/job → enqueue 10.
+- 41 judged, no summary → enqueue 40.
+- summary READY through 30, 41 judged → enqueue 40.
+- summary READY through 40 with matching fingerprint, 41 judged → no-op.
+- same 40-boundary source already PENDING/PROCESSING/RETRY → no duplicate.
+- same 40-boundary source already BLOCKED and public status is ERROR → do not silently create a fifth attempt on restart.
 
-The next 10-question boundary must still be able to enqueue a fresh summary and recover automatically.
+This startup pass is deliberately **reconciliation**, not “retry everything”. It repairs missing work caused by deploying the feature into an already-running game or by a process stopping before a boundary was scheduled, while preserving the existing retry ceiling.
 
-## Summary semantics
+The operation must be safe if multiple Worker processes start: database uniqueness/idempotency determines the winner and all other attempts become no-ops.
 
-### Input boundary
+### Pending refresh
 
-The summarizer receives only rows equivalent to:
+If no prior successful summary exists, show `正在整理当前进度…`.
+
+If an older READY summary exists, keep its facts visible while the newer target is PENDING and show `正在更新…` / `正在更新到第 N 问`.
+
+### Failed refresh
+
+After retries are exhausted, keep the last READY facts visible and expose only a safe ERROR state such as `本轮总结暂时未更新`.
+
+Do not expose queue IDs, provider/model names, retry counts, error codes, or stack traces.
+
+A future new boundary (for example 50 after a blocked 40) may enqueue normally and recover.
+
+## Summary semantics and safety boundary
+
+### Model input
+
+The summarizer receives only:
 
 ```ts
-type ProgressSummarySourceItem = {
+export type ProgressSummarySourceItem = {
   sequence_no: number;
   question: string;
-  verdict: 'YES' | 'NO' | 'BOTH' | 'IRRELEVANT';
+  verdict: JudgeVerdict;
+};
+
+export type ProgressSummaryInput = {
+  questions: ProgressSummarySourceItem[];
 };
 ```
 
-The Worker loads these from public/current state (`api.messages`) through the job’s fixed `through_sequence_no` boundary.
+Source rows come from current public state (`api.messages`) and are fixed to the job boundary.
 
-The Worker must verify that the number of JUDGED normal messages through that boundary equals the job’s `through_question_count`. A mismatch means the job input is stale/invalid and must not publish a summary.
-
-### No private-ground-truth input
-
-The summarizer must not receive:
+The summarizer must never receive:
 
 - `private.game_secrets.full_solution`
 - `private.key_points`
 - `private.key_point_evidence`
-- `private.question_judgments` coverage arrays
-- key-point claims or scores
+- `private.question_judgments` coverage/evidence arrays
+- `private.key_point_claims`
+- player scores or awarded points
 
-This is an intentional security boundary. The model is being asked to condense already-public discoveries, not to solve the puzzle.
+This makes the summarizer a compression layer over already-public knowledge, not a second puzzle solver.
 
 ### YES
 
-A YES judgment may be turned into a concise confirmed fact, preserving the proposition actually asked by the player. The model must correctly handle natural-language negation rather than assuming YES always produces a grammatically positive sentence.
+Convert the proposition actually established by the question/verdict into a concise confirmed fact. Handle grammatical negation correctly.
 
 ### NO
 
-A NO judgment may be turned into a concise ruled-out fact. The model must negate the actual proposition asked by the player and must correctly handle questions that are already grammatically negative.
+Convert the proposition into a concise ruled-out fact. Handle already-negative questions correctly instead of mechanically adding another negation.
 
 ### IRRELEVANT
 
-IRRELEVANT may only be summarized as a broad topic/direction being unrelated. It must not be converted into a hidden positive or negative story fact.
+Only summarize the broad direction as unrelated.
 
 Example:
 
-- question: `天气重要吗？`
-- verdict: `IRRELEVANT`
-- acceptable: `天气因素与事件无关。`
-- unacceptable: `当时天气晴朗。`
+- `天气重要吗？` + IRRELEVANT → `天气因素与事件无关。`
+- Must not infer `当时天气晴朗。`
 
 ### BOTH
 
-BOTH rows are supplied only for context ordering if useful to the prompt, but V1 output must not create facts from them. The prompt explicitly instructs the model to ignore BOTH when producing the three output arrays.
+The source row may be supplied for ordering/context, but V1 output arrays must not create facts from BOTH.
 
-### Compression and duplication
+### Compression
 
-The model should merge repeated or near-duplicate discoveries and prefer the most informative formulation supported by the public judgments.
+The model should merge repeated/overlapping public discoveries. It must not invent new motive, cause, identity, chronology, relation, or outcome that cannot be reconstructed from the supplied judged questions.
 
-It must not:
+Each category contains 0–4 unique concise strings, each 1–120 characters.
 
-- repeat every question individually;
-- invent motives, causes, identities, chronology, or causal links not established by the judged questions;
-- complete a partially discovered key point using model knowledge;
-- use the private puzzle answer, because it is not supplied;
-- mention “YES / NO / IRRELEVANT” tokens in the player-facing wording.
+## Canonical source fingerprint
 
-Each output category contains 0–4 items. Each item is a single concise natural-language sentence with a maximum length of 120 characters. The complete card therefore remains usable in the 290px sidebar.
+Same-boundary refreshes require distinguishing old and new public verdict state. Each summary job therefore stores a deterministic `source_fingerprint`.
+
+Build it from the exact fixed input array in sequence order. The canonical data is equivalent to:
+
+```ts
+JSON.stringify(
+  questions.map(({ sequence_no, question, verdict }) => [sequence_no, question, verdict]),
+)
+```
+
+Hash with SHA-256 and store the lowercase hex digest (64 characters).
+
+The fingerprint is not a security secret. It is an idempotency/staleness token.
+
+Consequences:
+
+- two scheduling attempts for the same boundary and unchanged public judgments converge on one job;
+- a challenge that changes a verdict inside the boundary creates a different fingerprint and therefore a new refresh job;
+- a challenge that leaves the public verdict unchanged does not create duplicate work;
+- startup reconciliation can tell whether the current READY/ERROR state matches the current source;
+- stale model output can be rejected before publication.
 
 ## Contracts
 
-Add the following public contract types in `packages/contracts/src/game.ts`:
+In `packages/contracts/src/game.ts` add:
 
 ```ts
 export type ProgressSummaryGenerationStatus = 'PENDING' | 'READY' | 'ERROR';
@@ -190,38 +235,23 @@ export type PublicGameProgressSummary = {
   ruledOutFacts: string[];
   irrelevantTopics: string[];
   generationStatus: ProgressSummaryGenerationStatus;
+  targetQuestionCount: number | null;
   generatedAt: Timestamp | null;
   updatedAt: Timestamp;
 };
 ```
 
-Extend `PublicGameSnapshot`:
+`throughQuestionCount` / `throughSequenceNo` describe the last successfully published content. `targetQuestionCount` describes a newer PENDING/ERROR target and may be null when no newer target exists.
+
+Extend `PublicGameSnapshot` with:
 
 ```ts
-export type PublicGameSnapshot = {
-  game: PublicGame;
-  players: PublicPlayer[];
-  messages: PublicMessage[];
-  events: PublicGameEvent[];
-  stats: PublicPlayerStats[];
-  progressSummary: PublicGameProgressSummary | null;
-  reveal: PublicGameReveal | null;
-};
+progressSummary: PublicGameProgressSummary | null;
 ```
 
-Add AI contracts in `packages/contracts/src/judge.ts`:
+In `packages/contracts/src/judge.ts` add:
 
 ```ts
-export type ProgressSummarySourceItem = {
-  sequence_no: number;
-  question: string;
-  verdict: JudgeVerdict;
-};
-
-export type ProgressSummaryInput = {
-  questions: ProgressSummarySourceItem[];
-};
-
 export type ProgressSummaryResult = {
   confirmed_facts: string[];
   ruled_out_facts: string[];
@@ -229,7 +259,7 @@ export type ProgressSummaryResult = {
 };
 ```
 
-Extend `SemanticJudge` with:
+Extend `SemanticJudge`:
 
 ```ts
 summarizeProgress(input: ProgressSummaryInput): Promise<ProgressSummaryResult>;
@@ -237,48 +267,49 @@ summarizeProgress(input: ProgressSummaryInput): Promise<ProgressSummaryResult>;
 
 ## Database design
 
-### Public current-summary table
+### `api.game_progress_summaries`
 
-Create `api.game_progress_summaries` with one current public state row per game:
+One safe public current-state row per game:
 
 ```text
-game_id                 uuid primary key -> api.games(id) on delete cascade
-through_question_count  integer not null default 0
-through_sequence_no     bigint not null default 0
-confirmed_facts         text[] not null default '{}'
-ruled_out_facts          text[] not null default '{}'
-irrelevant_topics       text[] not null default '{}'
-generation_status       text not null check PENDING | READY | ERROR
-generated_at             timestamptz null
-updated_at               timestamptz not null default now()
+game_id                       uuid primary key -> api.games(id) on delete cascade
+through_question_count        integer not null default 0
+through_sequence_no           bigint not null default 0
+source_fingerprint            text null
+confirmed_facts               text[] not null default '{}'
+ruled_out_facts                text[] not null default '{}'
+irrelevant_topics             text[] not null default '{}'
+generation_status             text not null check PENDING | READY | ERROR
+target_question_count         integer null
+target_sequence_no            bigint null
+target_source_fingerprint     text null
+generated_at                   timestamptz null
+updated_at                     timestamptz not null default now()
 ```
 
-Constraints:
+Rules:
 
-- `through_question_count >= 0`
-- `through_sequence_no >= 0`
-- a READY row must have `through_question_count >= 10` and divisible by 10
-- the table contains only safe player-visible text and safe status metadata
+- successful published boundaries are 0 or positive multiples of 10;
+- a READY successful summary has `through_question_count >= 10`, a source fingerprint, and `generated_at`;
+- PENDING/ERROR may retain older successful content while target columns identify the attempted newer/current source;
+- source/target fingerprints, counts, and status are safe public metadata; queue/error internals remain private.
 
-Permissions follow existing public tables:
+Permissions:
 
 - `anon`, `authenticated`: SELECT only
 - `game_web`: SELECT only
-- `judge_worker`: SELECT, INSERT, UPDATE
-- RLS forced
-- public read policy for anon/authenticated
-- narrow game_web/worker policies matching these privileges
-- add `api.game_progress_summaries` to `supabase_realtime`
+- `judge_worker`: SELECT/INSERT/UPDATE
+- force RLS
+- add to `supabase_realtime`
 
-### Private summary-job queue
-
-Create `private.progress_summary_jobs`:
+### `private.progress_summary_jobs`
 
 ```text
 id                      uuid primary key
 game_id                 uuid not null -> api.games(id) on delete cascade
 through_question_count  integer not null
 through_sequence_no     bigint not null
+source_fingerprint      text not null
 status                  text not null
 attempt_count           integer not null default 0
 next_attempt_at         timestamptz not null default now()
@@ -289,124 +320,155 @@ created_at              timestamptz not null default now()
 updated_at              timestamptz not null default now()
 ```
 
-Allowed job statuses mirror existing queue conventions:
+Statuses:
 
-`PENDING | PROCESSING | RETRY | BLOCKED | COMPLETED | CANCELLED`
+`PENDING | PROCESSING | RETRY | BLOCKED | COMPLETED | STALE | CANCELLED`
 
-Constraints:
+Use a unique constraint/index on:
 
-- `through_question_count >= 10`
-- `through_question_count % 10 = 0`
-- `through_sequence_no > 0`
-- `attempt_count >= 0`
+```text
+(game_id, through_question_count, source_fingerprint)
+```
 
-Add a partial unique index preventing duplicate active jobs for the exact same `(game_id, through_question_count, through_sequence_no)` when status is `PENDING`, `PROCESSING`, or `RETRY`.
+This uniqueness is intentionally across all statuses. A BLOCKED job for the same exact source cannot be recreated by Worker restart; a changed source gets a new fingerprint and can enqueue.
 
-Permissions:
+No browser/game_web access. `judge_worker` gets only the narrow queue privileges/policies it needs.
 
-- no browser access
-- no anon/authenticated access
-- no game_web access
-- `judge_worker`: SELECT, INSERT, UPDATE
-- forced RLS with judge_worker-only policies
+### Judge audit
 
-This preserves the current separation where browser-facing routes cannot lease Worker jobs.
+Extend `private.judge_attempts` with nullable `progress_summary_job_id` and change the parent constraint so exactly one of:
 
-## Scheduling rules
+- `action_id`
+- `extraction_job_id`
+- `progress_summary_job_id`
 
-### Normal-question completion
+is non-null.
 
-After `completeQuestion()` has successfully committed the current judgment state for the message, use the current count of `api.messages where game_id = ? and status = 'JUDGED'`.
+## Shared scheduling helper
 
-If the count is a positive multiple of 10:
+Create one repository-level Worker DB helper that all three trigger paths use, conceptually:
 
-1. enqueue a summary job with `through_question_count = judgedCount`;
-2. set `through_sequence_no` to the just-completed message sequence;
-3. cancel older PENDING/RETRY summary jobs for the same game and smaller boundaries;
-4. upsert `api.game_progress_summaries.generation_status = 'PENDING'` while preserving any previous READY content and metadata.
+```ts
+ensureProgressSummaryJobForBoundary(
+  sql,
+  gameId,
+  throughQuestionCount,
+): Promise<EnsureProgressSummaryResult>
+```
 
-The queue operation must be idempotent so an exact-once question completion or retry cannot create duplicate active jobs.
+Responsibilities:
+
+1. verify boundary is >=10 and divisible by 10;
+2. load exactly the first N current JUDGED messages in sequence order;
+3. derive Nth message `throughSequenceNo`;
+4. compute canonical `sourceFingerprint`;
+5. if `api.game_progress_summaries.source_fingerprint` already equals the target fingerprint at the same boundary and is READY, no-op;
+6. if a job already exists with `(game, boundary, fingerprint)` in any status, do not insert another;
+7. otherwise insert a PENDING job;
+8. set/refresh public target metadata and PENDING status without deleting older successful facts.
+
+This helper is the idempotency point for normal boundaries, challenge refresh, and startup reconciliation.
+
+## Trigger rules
+
+### Normal question completion
+
+After a question has become JUDGED inside `completeQuestion()`:
+
+1. count current JUDGED messages for the game;
+2. only when `count % 10 === 0`, call the shared ensure helper with `count`;
+3. do not use receipt count;
+4. do not change scoring if scheduling fails due to an already-existing job.
 
 ### Challenge refresh
 
-After a challenge resolves, only schedule a summary refresh when all of these are true:
+After a challenge has resolved and the **public verdict actually changed**:
 
-1. the resolved public verdict differs from the previous current verdict;
-2. a public progress-summary row exists for the game;
-3. the challenged message `sequence_no <= progressSummary.through_sequence_no`;
-4. `progressSummary.through_question_count >= 10`.
+1. calculate the latest eligible boundary `floor(judgedCount / 10) * 10`;
+2. if boundary < 10, no-op;
+3. determine whether the challenged message is among the first N judged messages for that boundary;
+4. if not, no-op;
+5. if yes, call the same ensure helper for N.
 
-The refresh job reuses the currently published boundary (`through_question_count` and `through_sequence_no`). It regenerates the whole summary from current public verdicts through that boundary.
+The new fingerprint makes a changed same-boundary verdict a new job. If the challenge outcome leaves the current verdict unchanged, no summary refresh is scheduled.
 
-A challenge for a question after the published boundary does not trigger a refresh because that question has not yet been summarized.
+### Worker startup reconciliation
 
-## Worker behavior
+Add a startup hook in the Worker lifecycle. Required order:
 
-Add a third queue type for progress-summary jobs. Do not add `PROGRESS_SUMMARY` to `private.game_actions.action_type`.
+```text
+initial heartbeat
+→ reconcile current ACTIVE game summary
+→ enter normal extraction/action/summary loop
+```
 
-The main Worker loop may process summary work serially with existing AI work. Summary work should be checked before the next normal game action once a summary job is ready. This can add one summarization call after each 10-question boundary, but avoids a second deployment/runtime in V1.
+The reconciliation helper:
 
-Existing retry policy (2s, 5s, 15s; block after four attempts) should be reused for transport/timeout/schema errors.
+```ts
+reconcileActiveGameProgressSummary(sql): Promise<void>
+```
 
-A summary job processor:
+must:
 
-1. loads the fixed public input boundary;
-2. verifies the boundary contains exactly `through_question_count` judged questions;
-3. calls `judge.summarizeProgress()` outside a transaction;
-4. validates structured output;
-5. completes with a short transaction that verifies the job lease, stores the public summary, sets READY, and marks the job COMPLETED.
+1. read at most the current ACTIVE game;
+2. count/order current JUDGED messages;
+3. compute latestBoundary = floor(count / 10) * 10;
+4. no-op below 10;
+5. call `ensureProgressSummaryJobForBoundary(sql, gameId, latestBoundary)`.
 
-If retries are exhausted, mark the job BLOCKED and set the public row to ERROR only when that blocked job still represents the newest requested boundary/state.
+Do not clear or reset a BLOCKED job. Because the shared ensure helper checks the all-status unique key, restarting the Worker cannot bypass the retry ceiling.
 
-## AI skill
+Startup reconciliation failure should be logged/fail startup only for genuine database/programming errors. A normal idempotent no-op is not an error.
+
+## Worker queue and processing
+
+Add progress-summary as a separate queue type, not a game action.
+
+Reuse existing lease/retry timings: 2s, 5s, 15s; block after four attempts.
+
+A processor:
+
+1. loads exactly the fixed first N judged public messages;
+2. recomputes the fingerprint and verifies it equals the job fingerprint;
+3. if the input has already changed, mark the job STALE and ensure a replacement for the same boundary/current source; do not call/publish stale output;
+4. call `judge.summarizeProgress()` outside a transaction;
+5. on completion, reacquire a short transaction, re-read the fixed source and recheck fingerprint;
+6. if changed while the model was running, mark STALE and ensure replacement;
+7. otherwise publish the result atomically, advance successful boundary/source fields, clear target fields, set READY, and mark job COMPLETED.
+
+If retries exhaust, mark job BLOCKED and set public ERROR only if its target fingerprint is still the current target. Preserve older successful facts.
+
+## AI skill and config
 
 Add `progress-summary` as a fourth `HarnessSkill`.
 
 Prompt version: `progress-summary-v1`.
 
-Schema version remains `judge-schema-v1` because the result is a new skill, not a backward-compatible variant of question judging.
-
-Add independent config overrides while preserving `JUDGE_MODEL` fallback:
+Add optional overrides with `JUDGE_MODEL` fallback:
 
 ```text
 JUDGE_PROGRESS_SUMMARY_MODEL
 JUDGE_PROGRESS_SUMMARY_REASONING_EFFORT
 ```
 
-The default can use the same model and `off` reasoning as other skills unless the environment overrides it.
-
-The JSON schema is strict:
+Strict output schema:
 
 - object only
-- required: `confirmed_facts`, `ruled_out_facts`, `irrelevant_topics`
-- each property is an array
-- maximum 4 items each
-- each item string length 1–120
-- no additional properties
+- required arrays: `confirmed_facts`, `ruled_out_facts`, `irrelevant_topics`
+- max 4 items per array
+- each string 1–120 chars
+- no extra properties
+- reject normalized exact duplicates inside a category
 
-Validation should also reject exact duplicate normalized strings within the same category.
+Audit through the existing best-effort `judge_attempts` flow; audit failure must never alter summary behavior.
 
-## Audit behavior
+## Snapshot, Realtime, and UI
 
-Progress-summary AI calls should use the same best-effort `private.judge_attempts` audit pattern as existing skills.
+`getCurrentSnapshot()` includes `progressSummary` from `api.game_progress_summaries`.
 
-Extend `private.judge_attempts` so a row may reference `progress_summary_job_id`, and extend the existing parent union so exactly one parent source is selected among action, extraction job, and progress-summary job.
+`createRealtimeSubscribe()` subscribes to this table by `game_id`.
 
-Audit failure must never alter summary correctness or retry behavior, matching the existing best-effort audit invariant.
-
-## Snapshot and Realtime
-
-`getCurrentSnapshot()` reads at most one row from `api.game_progress_summaries` for the current game and returns it as `progressSummary`.
-
-`createRealtimeSubscribe()` subscribes to changes on `api.game_progress_summaries` filtered by `game_id` so PENDING / READY / ERROR transitions refresh the public snapshot automatically.
-
-The current `api.games`, messages, events, and stats subscriptions remain unchanged.
-
-## UI design
-
-Create a focused `ProgressSummaryPanel` component instead of expanding `GameClient` further.
-
-Inputs:
+Create `ProgressSummaryPanel` rather than growing `GameClient` further:
 
 ```ts
 type ProgressSummaryPanelProps = {
@@ -415,55 +477,46 @@ type ProgressSummaryPanelProps = {
 };
 ```
 
-The component computes `judgedQuestionCount` from `messages.filter(message => message.status === 'JUDGED')`.
+UI states:
 
-States:
+- `<10 judged`, no summary: `还在探索中` + countdown.
+- no successful facts + PENDING: `正在整理当前进度…`.
+- READY: show `整理至第 N 问`, category groups, countdown to next boundary.
+- old READY facts + newer PENDING: keep old facts and show `正在更新到第 N 问…`.
+- old facts + ERROR: keep old facts and show `本轮总结暂时未更新`.
+- no successful facts + ERROR: safe failure copy, no technical details.
 
-1. `< 10` judged, no summary: countdown to first summary.
-2. summary PENDING, no previous content: `正在整理当前进度…`.
-3. summary READY: show categories and next-boundary countdown.
-4. summary PENDING with previous content: show previous content plus `正在更新…`.
-5. summary ERROR with previous content: show previous content plus `本轮总结暂时未更新`.
-6. summary ERROR without content: show `当前进度暂时无法整理`.
+Do not show hidden KP progress in this card. The existing discovered-key-point mechanics remain separate.
 
-READY rendering:
+## Key acceptance cases
 
-- eyebrow: `当前进度`
-- meta: `整理至第 {throughQuestionCount} 问`
-- confirmed: `目前可以确定`
-- ruled out: `已经排除`
-- irrelevant: `无关方向`
+1. Judged counts 1–9 create no job.
+2. The 10th judged question creates exactly one boundary-10 job.
+3. Pending receipt count reaching 10 does not trigger until the 10th question is JUDGED.
+4. Question 20 creates boundary 20 and cumulative input contains questions 1–20.
+5. BOTH rows produce no summary fact.
+6. A challenge changing question 7 after boundary 10 produces a new fingerprint and refresh job for boundary 10.
+7. A challenge changing question 14 while current eligible boundary is 10 does not refresh 10.
+8. Changed source during model execution cannot publish stale output.
+9. Worker startup with 41 judged questions and no summary ensures boundary 40.
+10. Worker startup with READY matching boundary 40 does nothing.
+11. Worker startup with an existing PENDING/PROCESSING/RETRY boundary-40 job does not duplicate it.
+12. Worker startup with a BLOCKED job for the exact boundary/fingerprint does not recreate it.
+13. Two startup reconciliations racing produce one job because of the unique key.
+14. Summary model input contains public question text/current verdict only and no private solution/KP/Evidence data.
+15. Realtime READY transition replaces the placeholder in the right-sidebar “当前进度” card.
 
-Only render category headings that contain at least one sentence.
+## Verification standard
 
-Use the existing sidebar-card visual language. Add only focused CSS for summary spacing/list typography/status; do not redesign the dashboard.
+Implementation is complete only after focused TDD plus:
 
-On mobile, the existing sidebar one-column breakpoint should continue to work without new layout rules.
+```bash
+pnpm exec supabase db reset
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm build
+git diff --check
+```
 
-## Error handling and consistency
-
-- Summary failure must never roll back a completed question or challenge.
-- A summary job must never award points or change game/key-point progress.
-- A stale/invalid input boundary must never publish a result.
-- Repeated enqueue requests for the same active boundary must be idempotent.
-- The previous successful summary remains visible until a newer summary successfully completes.
-- Games created before this migration require no backfill; they simply have `progressSummary = null` until a qualifying boundary is reached after deployment.
-- ENDED games continue returning the last summary row if one exists, while the reveal remains the authoritative final answer display.
-
-## Acceptance criteria
-
-1. At 9 judged questions, no AI summary exists and the sidebar shows one question remaining.
-2. The 10th judged normal question enqueues exactly one summary job.
-3. `FINAL_ANSWER` and `CHALLENGE` actions do not increment the summary cadence.
-4. The summary model input contains question text, sequence, and current verdict only; it contains no full solution, key-point text, Evidence text, claims, or scores.
-5. A successful 10-question job publishes a READY summary and updates the right-side “当前进度” card over Realtime.
-6. At question 20, the model receives the cumulative first 20 judged questions, not the previous AI summary plus ten new questions.
-7. YES, NO, and IRRELEVANT can produce natural-language output in the expected category; BOTH produces no player-facing fact.
-8. Duplicate/repeated questions are compressed instead of repeated verbatim.
-9. A challenge that changes the verdict of a question already inside the current published boundary schedules a refresh of that boundary.
-10. A challenge on a question after the published boundary does not refresh the old summary.
-11. A summary failure leaves gameplay, scoring, verdicts, and the last good summary unchanged.
-12. Exhausted retries set a safe ERROR state without exposing provider/debug information.
-13. The browser has no access to `private.progress_summary_jobs` or hidden puzzle data.
-14. Existing normal-question, cumulative Evidence, challenge, final-answer, and scoring regressions continue to pass.
-15. Web implementation obeys `apps/web/AGENTS.md`: before changing Next.js-specific code, Codex must read the relevant local Next 16.3.1 docs under `apps/web/node_modules/next/dist/docs/` rather than assuming older Next APIs.
+Also run the local acceptance path extended to cover boundary-10 generation and startup backfill (41 → 40).
