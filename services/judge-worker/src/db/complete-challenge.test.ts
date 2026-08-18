@@ -18,7 +18,13 @@ const freshJudgments = [
   { slot: 4, verdict: 'YES' as const, coveredKeyPointIds: [] },
 ];
 
-function fakeTransaction() {
+type ChallengeFakeOptions = {
+  messageSequenceNo?: number;
+  judgedCount?: number;
+  boundarySequenceNos?: number[];
+};
+
+function fakeTransaction(options: ChallengeFakeOptions = {}) {
   const calls: string[] = [];
   const transaction = async <T>(callback: (sql: TransactionSql) => Promise<T>): Promise<T> => {
     const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
@@ -31,7 +37,12 @@ function fakeTransaction() {
       }] as never);
       if (normalized.includes('from api.games')) return Promise.resolve([{ id: gameId, status: 'ACTIVE' }] as never);
       if (normalized.includes('from private.message_challenges')) return Promise.resolve([{ id: challengeId, messageId, gameId, status: 'PENDING' }] as never);
-      if (normalized.includes('from api.messages') && normalized.includes('challenge_status')) return Promise.resolve([{ id: messageId, gameId, playerId, sequenceNo: 4, status: 'JUDGED', challengeStatus: 'PENDING', awardedPoints: 1 }] as never);
+      if (normalized.includes('count(*)::int as count')) return Promise.resolve([{ count: options.judgedCount ?? 0 }] as never);
+      if (normalized.includes('from api.messages') && normalized.includes('content as question')) {
+        const sequenceNos = options.boundarySequenceNos ?? [];
+        return Promise.resolve(sequenceNos.map((sequenceNo) => ({ sequence_no: sequenceNo, question: `问题${sequenceNo}`, verdict: 'YES' })) as never);
+      }
+      if (normalized.includes('from api.messages') && normalized.includes('challenge_status')) return Promise.resolve([{ id: messageId, gameId, playerId, sequenceNo: options.messageSequenceNo ?? 4, status: 'JUDGED', challengeStatus: 'PENDING', awardedPoints: 1 }] as never);
       if (normalized.includes('from private.question_judgments') && normalized.includes('original_verdict')) return Promise.resolve([{ messageId, currentVerdict: 'YES', currentCoveredKeyPointIds: [keyPointOne] }] as never);
       if (normalized.includes('from private.key_points')) return Promise.resolve([{ id: keyPointOne }, { id: keyPointTwo }, { id: keyPointThree }] as never);
       if (normalized.includes('coalesce(sum(awarded_points)')) return Promise.resolve([{ playerId, points: 1 }] as never);
@@ -66,15 +77,40 @@ describe('completeChallenge', () => {
 
   it('records an upheld outcome when the fresh judgment matches the original judgment', async () => {
     const fake = fakeTransaction();
+    const scheduled: number[] = [];
     const matchingJudgments = [1, 2, 3, 4].map((slot) => ({
       slot,
       verdict: 'YES' as const,
       coveredKeyPointIds: [keyPointOne],
     }));
 
-    await completeChallenge({ actionId, workerId: 'worker-1', challengeId, freshJudgments: matchingJudgments }, { transaction: fake.transaction });
+    await completeChallenge({ actionId, workerId: 'worker-1', challengeId, freshJudgments: matchingJudgments }, {
+      transaction: fake.transaction,
+      scheduleProgressSummary: async (_sql, _gameId, boundary) => { scheduled.push(boundary); },
+    });
 
     expect(fake.calls.join('\n').toLowerCase()).toContain('challenge_outcome = upheld');
+    expect(scheduled).toHaveLength(0);
+  });
+
+  it.each([
+    [7, 10, 10, 1],
+    [14, 14, 10, 0],
+    [17, 23, 20, 1],
+  ])('refreshes only when a changed challenge message is inside the latest boundary (question %s)', async (messageSequenceNo, judgedCount, boundary, expectedCalls) => {
+    const fake = fakeTransaction({
+      messageSequenceNo,
+      judgedCount,
+      boundarySequenceNos: Array.from({ length: boundary }, (_, index) => index + 1),
+    });
+    const scheduled: number[] = [];
+
+    await completeChallenge({ actionId, workerId: 'worker-1', challengeId, freshJudgments }, {
+      transaction: fake.transaction,
+      scheduleProgressSummary: async (_sql, _gameId, scheduledBoundary) => { scheduled.push(scheduledBoundary); },
+    });
+
+    expect(scheduled).toEqual(expectedCalls ? [boundary] : []);
   });
 
   it('refuses to start an incomplete four-vote reconciliation', async () => {

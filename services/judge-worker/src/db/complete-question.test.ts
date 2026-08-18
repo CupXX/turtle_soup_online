@@ -59,6 +59,60 @@ function successfulHandler(insertedClaims: string[] = [keyPointOne, keyPointTwo]
 }
 
 describe('completeQuestion', () => {
+  it.each([
+    [9, 0],
+    [10, 1],
+    [11, 0],
+    [19, 0],
+    [20, 1],
+  ])('schedules only the current judged boundary for legacy judgments (%s)', async (judgedCount, expectedCalls) => {
+    const baseHandler = successfulHandler([]);
+    const scheduled: number[] = [];
+    const fake = fakeTransaction((query) => {
+      if (query.toLowerCase().includes('count(*)::int as count')) return [{ count: judgedCount }];
+      return baseHandler(query);
+    });
+
+    await completeQuestion({
+      actionId,
+      workerId: 'worker-1',
+      verdict: 'YES',
+      fullyCoveredKeyPointIds: [],
+    }, {
+      transaction: fake.transaction,
+      scheduleProgressSummary: async (_sql, _gameId, boundary) => { scheduled.push(boundary); },
+    });
+
+    expect(scheduled).toHaveLength(expectedCalls);
+    if (expectedCalls) expect(scheduled[0]).toBe(judgedCount);
+  });
+
+  it.each([
+    [9, 0],
+    [10, 1],
+    [20, 1],
+  ])('uses the same cadence for Evidence judgments (%s)', async (judgedCount, expectedCalls) => {
+    const baseHandler = successfulHandler([]);
+    const scheduled: number[] = [];
+    const fake = fakeTransaction((query) => {
+      if (query.toLowerCase().includes('count(*)::int as count')) return [{ count: judgedCount }];
+      return baseHandler(query);
+    });
+
+    await completeQuestion({
+      actionId,
+      workerId: 'worker-1',
+      verdict: 'YES',
+      establishedEvidenceIds: [],
+    }, {
+      transaction: fake.transaction,
+      scheduleProgressSummary: async (_sql, _gameId, boundary) => { scheduled.push(boundary); },
+    });
+
+    expect(scheduled).toHaveLength(expectedCalls);
+    if (expectedCalls) expect(scheduled[0]).toBe(judgedCount);
+  });
+
   it('publishes a YES verdict and awards only newly inserted first claims', async () => {
     const fake = fakeTransaction(successfulHandler());
 

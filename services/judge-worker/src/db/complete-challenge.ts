@@ -1,7 +1,9 @@
 import type { ChallengeOutcome, JudgeVerdict } from '@turtle-soup/contracts';
 import { resolveChallengeVotes, resolveEvidenceChallengeVotes, type ChallengeVote, type EvidenceChallengeVote } from '@turtle-soup/game-core';
+import type { Sql, TransactionSql } from 'postgres';
 import { withWorkerTransaction, type WorkerTransaction } from './client.js';
 import { rebuildEvidenceProgressInTransaction } from './rebuild-evidence-progress.js';
+import { ensureProgressSummaryJobForBoundary, loadProgressSummaryBoundary } from './progress-summary-queue.js';
 
 export type CompleteChallengeFreshJudgment = {
   slot: number;
@@ -20,7 +22,14 @@ export type CompleteChallengeInput = {
 export type CompleteChallengeDependencies = {
   transaction?: WorkerTransaction;
   now?: Date;
+  scheduleProgressSummary?: ProgressSummaryScheduler;
 };
+
+export type ProgressSummaryScheduler = (
+  sql: TransactionSql,
+  gameId: string,
+  throughQuestionCount: number,
+) => Promise<void>;
 
 type ActionRow = {
   id: string;
@@ -42,6 +51,36 @@ type AwardRow = { playerId: string; points: number };
 
 function transactionFor(dependencies: CompleteChallengeDependencies): WorkerTransaction {
   return dependencies.transaction ?? withWorkerTransaction;
+}
+
+function progressSummaryScheduler(dependencies: CompleteChallengeDependencies): ProgressSummaryScheduler {
+  return dependencies.scheduleProgressSummary ?? ((sql, gameId, throughQuestionCount) => ensureProgressSummaryJobForBoundary(
+    sql as unknown as Sql,
+    gameId,
+    throughQuestionCount,
+  ));
+}
+
+async function scheduleChangedChallengeBoundary(
+  sql: TransactionSql,
+  gameId: string,
+  messageSequenceNo: number | string,
+  scheduleProgressSummary: ProgressSummaryScheduler,
+): Promise<void> {
+  const counts = await sql<Array<{ count: number | string | bigint }>>`
+    select count(*)::int as count
+    from api.messages
+    where game_id = ${gameId}
+      and status = 'JUDGED'
+      and verdict is not null
+  `;
+  const judgedCount = Number(counts[0]?.count ?? 0);
+  const boundary = Math.floor(judgedCount / 10) * 10;
+  if (boundary < 10) return;
+
+  const source = await loadProgressSummaryBoundary(sql as unknown as Sql, gameId, boundary);
+  if (source.throughSequenceNo < Number(messageSequenceNo)) return;
+  await scheduleProgressSummary(sql, gameId, boundary);
 }
 
 function activeLease(action: ActionRow, workerId: string, now: Date): boolean {
@@ -89,6 +128,7 @@ export async function completeChallenge(
   const slots = input.freshJudgments.map(({ slot }) => slot).sort((left, right) => left - right);
   if (slots.join(',') !== '1,2,3,4') throw new Error('INCOMPLETE_CHALLENGE_JUDGMENTS');
   const now = dependencies.now ?? new Date();
+  const scheduleProgressSummary = progressSummaryScheduler(dependencies);
 
   await transactionFor(dependencies)(async (sql) => {
     const actions = await sql<ActionRow[]>`
@@ -250,6 +290,9 @@ export async function completeChallenge(
           and status = 'PROCESSING'
           and lease_owner = ${input.workerId}
       `;
+      if (evidenceResolution.verdict !== original.currentVerdict) {
+        await scheduleChangedChallengeBoundary(sql, action.gameId, message.sequenceNo, scheduleProgressSummary);
+      }
       return;
     }
     const freshVotes: ChallengeVote[] = input.freshJudgments.map(({ verdict, coveredKeyPointIds }) => ({
@@ -391,5 +434,8 @@ export async function completeChallenge(
         and status = 'PROCESSING'
         and lease_owner = ${input.workerId}
     `;
+    if (resolution.verdict !== originalVote.verdict) {
+      await scheduleChangedChallengeBoundary(sql, action.gameId, message.sequenceNo, scheduleProgressSummary);
+    }
   });
 }

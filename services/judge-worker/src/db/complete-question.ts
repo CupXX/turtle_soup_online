@@ -1,6 +1,8 @@
 import type { JudgeVerdict } from '@turtle-soup/contracts';
+import type { Sql, TransactionSql } from 'postgres';
 import { withWorkerTransaction, type WorkerTransaction } from './client.js';
 import { rebuildEvidenceProgressInTransaction } from './rebuild-evidence-progress.js';
+import { ensureProgressSummaryJobForBoundary } from './progress-summary-queue.js';
 import { QUESTION_JUDGE_PROMPT_VERSION } from '../skills/question-judge.js';
 
 const QUESTION_JUDGE_SCHEMA_VERSION = 'judge-schema-v1';
@@ -17,7 +19,14 @@ export type CompleteQuestionInput = {
 export type CompleteQuestionDependencies = {
   transaction?: WorkerTransaction;
   now?: Date;
+  scheduleProgressSummary?: ProgressSummaryScheduler;
 };
+
+export type ProgressSummaryScheduler = (
+  sql: TransactionSql,
+  gameId: string,
+  throughQuestionCount: number,
+) => Promise<void>;
 
 type ActionRow = {
   id: string;
@@ -37,6 +46,32 @@ const VERDICTS = new Set<JudgeVerdict>(['YES', 'NO', 'BOTH', 'IRRELEVANT']);
 
 function transactionFor(dependencies: CompleteQuestionDependencies): WorkerTransaction {
   return dependencies.transaction ?? withWorkerTransaction;
+}
+
+function progressSummaryScheduler(dependencies: CompleteQuestionDependencies): ProgressSummaryScheduler {
+  return dependencies.scheduleProgressSummary ?? ((sql, gameId, throughQuestionCount) => ensureProgressSummaryJobForBoundary(
+    sql as unknown as Sql,
+    gameId,
+    throughQuestionCount,
+  ));
+}
+
+async function scheduleQuestionBoundary(
+  sql: TransactionSql,
+  gameId: string,
+  scheduleProgressSummary: ProgressSummaryScheduler,
+): Promise<void> {
+  const counts = await sql<Array<{ count: number | string | bigint }>>`
+    select count(*)::int as count
+    from api.messages
+    where game_id = ${gameId}
+      and status = 'JUDGED'
+      and verdict is not null
+  `;
+  const judgedCount = Number(counts[0]?.count ?? 0);
+  if (judgedCount >= 10 && judgedCount % 10 === 0) {
+    await scheduleProgressSummary(sql, gameId, judgedCount);
+  }
 }
 
 function activeLease(action: ActionRow, workerId: string, now: Date): boolean {
@@ -77,6 +112,7 @@ export async function completeQuestion(
   const evidenceIds = uniqueEvidenceIds(input.establishedEvidenceIds ?? []);
   const evidenceMode = input.establishedEvidenceIds !== undefined;
   const now = dependencies.now ?? new Date();
+  const scheduleProgressSummary = progressSummaryScheduler(dependencies);
 
   await transactionFor(dependencies)(async (sql) => {
     const actions = await sql<ActionRow[]>`
@@ -198,6 +234,7 @@ export async function completeQuestion(
           and status = 'PROCESSING'
           and lease_owner = ${input.workerId}
       `;
+      await scheduleQuestionBoundary(sql, action.gameId, scheduleProgressSummary);
       return;
     }
 
@@ -298,5 +335,6 @@ export async function completeQuestion(
         and status = 'PROCESSING'
         and lease_owner = ${input.workerId}
     `;
+    await scheduleQuestionBoundary(sql, action.gameId, scheduleProgressSummary);
   });
 }
