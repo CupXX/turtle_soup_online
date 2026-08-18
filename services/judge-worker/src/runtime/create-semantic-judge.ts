@@ -2,6 +2,7 @@ import type { SemanticJudge } from '@turtle-soup/contracts';
 import { KEY_POINT_EXTRACTION_PROMPT_VERSION } from '../skills/key-point-extraction.js';
 import { QUESTION_JUDGE_PROMPT_VERSION } from '../skills/question-judge.js';
 import { FINAL_ANSWER_JUDGE_PROMPT_VERSION } from '../skills/final-answer-judge.js';
+import { PROGRESS_SUMMARY_PROMPT_VERSION } from '../skills/progress-summary.js';
 import { HarnessSemanticJudge } from './harness-semantic-judge.js';
 import { createHarnessInvoker } from './create-harness-invoker.js';
 import { OpenAIResponsesSemanticJudge } from './openai-responses-semantic-judge.js';
@@ -31,9 +32,10 @@ const PROMPT_VERSIONS: Record<HarnessSkill, string> = {
   'key-point-extraction': KEY_POINT_EXTRACTION_PROMPT_VERSION,
   'question-judge': QUESTION_JUDGE_PROMPT_VERSION,
   'final-answer-judge': FINAL_ANSWER_JUDGE_PROMPT_VERSION,
+  'progress-summary': PROGRESS_SUMMARY_PROMPT_VERSION,
 };
 
-const SKILLS: HarnessSkill[] = ['key-point-extraction', 'question-judge', 'final-answer-judge'];
+const SKILLS: HarnessSkill[] = ['key-point-extraction', 'question-judge', 'final-answer-judge', 'progress-summary'];
 
 export function createSemanticJudge(
   config: WorkerConfig,
@@ -79,6 +81,7 @@ export function createSemanticJudge(
       extractKeyPoints: (input) => judges['key-point-extraction'].extractKeyPoints(input),
       judgeQuestion: (input) => judges['question-judge'].judgeQuestion(input),
       judgeFinalAnswer: (input) => judges['final-answer-judge'].judgeFinalAnswer(input),
+      summarizeProgress: (input) => judges['progress-summary'].summarizeProgress(input),
     },
     metadata,
   };

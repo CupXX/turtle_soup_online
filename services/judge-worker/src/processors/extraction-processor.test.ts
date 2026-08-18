@@ -60,6 +60,7 @@ describe('processExtraction', () => {
       },
       judgeQuestion: async () => ({ verdict: 'NO', fully_covered_key_point_ids: [] }),
       judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+      summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
     };
     const transactionWithOrder = async <T>(callback: (sql: TransactionSql) => Promise<T>) => {
       order.push('transaction');

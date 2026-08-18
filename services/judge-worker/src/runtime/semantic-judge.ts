@@ -1,6 +1,6 @@
 import type { JudgeErrorCode, SemanticJudge } from '@turtle-soup/contracts';
 
-export type HarnessSkill = 'key-point-extraction' | 'question-judge' | 'final-answer-judge';
+export type HarnessSkill = 'key-point-extraction' | 'question-judge' | 'final-answer-judge' | 'progress-summary';
 
 export type HarnessInvocation = {
   skill: HarnessSkill;

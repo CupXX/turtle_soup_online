@@ -14,6 +14,7 @@ const config = {
     'key-point-extraction': { model: 'extract-model', reasoningEffort: 'high' as const },
     'question-judge': { model: 'question-model', reasoningEffort: 'off' as const },
     'final-answer-judge': { model: 'final-model', reasoningEffort: 'max' as const },
+    'progress-summary': { model: 'summary-model', reasoningEffort: 'low' as const },
   },
 };
 
@@ -27,6 +28,7 @@ describe('createSemanticJudge', () => {
           extractKeyPoints: async () => ({ key_points: [{ content: 'point', evidence: [{ content: 'evidence' }] }] }),
           judgeQuestion: async () => ({ verdict: 'YES', fully_covered_key_point_ids: [] }),
           judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+          summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
         } satisfies SemanticJudge;
       },
     });
@@ -34,11 +36,13 @@ describe('createSemanticJudge', () => {
     await runtime.judge.extractKeyPoints({ puzzle_surface: 'surface', full_solution: 'solution' });
     await runtime.judge.judgeQuestion({ puzzle_surface: 'surface', full_solution: 'solution', key_points: [], current_message: 'question' });
     await runtime.judge.judgeFinalAnswer({ key_points: [], final_answer: 'answer' });
+    await runtime.judge.summarizeProgress({ questions: [] });
 
     expect(invocations).toEqual([
       'key-point-extraction:extract-model:high',
       'question-judge:question-model:off',
       'final-answer-judge:final-model:max',
+      'progress-summary:summary-model:low',
     ]);
     expect(runtime.metadata['question-judge']).toMatchObject({
       provider: 'deepseek-harness',
@@ -46,6 +50,11 @@ describe('createSemanticJudge', () => {
       reasoningEffort: 'off',
       promptVersion: 'question-judge-v6',
       schemaVersion: 'judge-schema-v1',
+    });
+    expect(runtime.metadata['progress-summary']).toMatchObject({
+      model: 'summary-model',
+      reasoningEffort: 'low',
+      promptVersion: 'progress-summary-v1',
     });
   });
 
@@ -58,6 +67,7 @@ describe('createSemanticJudge', () => {
         'key-point-extraction': { model: 'extract-model', reasoningEffort: 'medium' as const },
         'question-judge': { model: 'question-model', reasoningEffort: 'medium' as const },
         'final-answer-judge': { model: 'final-model', reasoningEffort: 'medium' as const },
+        'progress-summary': { model: 'summary-model', reasoningEffort: 'medium' as const },
       },
     }, {
       createOpenAIJudge: (skill, configured) => {
@@ -66,6 +76,7 @@ describe('createSemanticJudge', () => {
           extractKeyPoints: async () => ({ key_points: [] }),
           judgeQuestion: async () => ({ verdict: 'YES', fully_covered_key_point_ids: [] }),
           judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+          summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
         };
       },
     });
@@ -79,6 +90,7 @@ describe('createSemanticJudge', () => {
       'key-point-extraction:extract-model:medium',
       'question-judge:question-model:medium',
       'final-answer-judge:final-model:medium',
+      'progress-summary:summary-model:medium',
     ]);
   });
 });

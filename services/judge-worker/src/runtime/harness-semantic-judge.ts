@@ -3,21 +3,26 @@ import type {
   FinalAnswerJudgeResult,
   KeyPointExtractionInput,
   KeyPointExtractionResult,
+  ProgressSummaryInput,
+  ProgressSummaryResult,
   QuestionJudgeInput,
   QuestionJudgeResult,
 } from '@turtle-soup/contracts';
 import { buildFinalAnswerJudgePrompt } from '../skills/final-answer-judge.js';
 import { buildKeyPointExtractionPrompt } from '../skills/key-point-extraction.js';
 import { buildQuestionJudgePrompt } from '../skills/question-judge.js';
+import { buildProgressSummaryPrompt } from '../skills/progress-summary.js';
 import {
   EVIDENCE_QUESTION_JUDGE_SCHEMA,
   FINAL_ANSWER_JUDGE_SCHEMA,
   JudgeValidationError,
   KEY_POINT_EXTRACTION_SCHEMA,
+  PROGRESS_SUMMARY_SCHEMA,
   QUESTION_JUDGE_SCHEMA,
   validateFinalAnswerResult,
   validateEvidenceQuestionResult,
   validateKeyPointExtractionResult,
+  validateProgressSummaryResult,
   validateQuestionResult,
 } from '../skills/validate-result.js';
 import {
@@ -60,6 +65,15 @@ export class HarnessSemanticJudge {
       buildFinalAnswerJudgePrompt(input),
       FINAL_ANSWER_JUDGE_SCHEMA,
       (raw) => validateFinalAnswerResult(raw, input.key_points.map((point) => point.id)),
+    );
+  }
+
+  summarizeProgress(input: ProgressSummaryInput): Promise<ProgressSummaryResult> {
+    return this.call(
+      'progress-summary',
+      buildProgressSummaryPrompt(input),
+      PROGRESS_SUMMARY_SCHEMA,
+      (raw) => validateProgressSummaryResult(raw),
     );
   }
 

@@ -38,4 +38,22 @@ describe('recordJudgeAttempt', () => {
     expect(calls[0]).not.toContain('answer');
     expect(calls[0]).not.toContain('reasoning_content');
   });
+
+  it('records a progress-summary job as the audit parent', async () => {
+    const calls: string[] = [];
+    const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
+      calls.push(strings.reduce((text, chunk, index) => `${text}${chunk}${index < values.length ? String(values[index]) : ''}`, ''));
+      return Promise.resolve([]);
+    }) as unknown as Sql;
+    const progressRecord = {
+      ...record,
+      skill: 'progress-summary',
+      parent: { progressSummaryJobId: '00000000-0000-4000-8000-000000000004', attemptNo: 2 },
+    } as unknown as JudgeAttemptRecord;
+
+    await recordJudgeAttempt(progressRecord, { sql, idFactory: () => '00000000-0000-4000-8000-000000000005' });
+
+    expect(calls[0]).toContain('progress_summary_job_id');
+    expect(calls[0]).toContain('00000000-0000-4000-8000-000000000004');
+  });
 });

@@ -48,6 +48,7 @@ function judge(): SemanticJudge {
     extractKeyPoints: async () => ({ key_points: [] }),
     judgeQuestion: async () => ({ verdict: 'YES', fully_covered_key_point_ids: [keyPointOne] }),
     judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+    summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
   };
 }
 

@@ -1,6 +1,7 @@
 import type {
   FinalAnswerJudgeResult,
   KeyPointExtractionResult,
+  ProgressSummaryResult,
   QuestionJudgeResult,
   SemanticJudge,
 } from '@turtle-soup/contracts';
@@ -9,6 +10,7 @@ export type FakeSemanticJudgeResponses = {
   extraction?: KeyPointExtractionResult;
   question?: QuestionJudgeResult;
   finalAnswer?: FinalAnswerJudgeResult;
+  progressSummary?: ProgressSummaryResult;
 };
 
 export class FakeSemanticJudge implements SemanticJudge {
@@ -30,5 +32,9 @@ export class FakeSemanticJudge implements SemanticJudge {
 
   async judgeFinalAnswer(): Promise<FinalAnswerJudgeResult> {
     return this.responses.finalAnswer ?? { covered_key_point_ids: [] };
+  }
+
+  async summarizeProgress(): Promise<ProgressSummaryResult> {
+    return this.responses.progressSummary ?? { confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] };
   }
 }

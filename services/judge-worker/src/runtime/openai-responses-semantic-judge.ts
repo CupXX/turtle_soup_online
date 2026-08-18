@@ -3,20 +3,25 @@ import type {
   FinalAnswerJudgeResult,
   KeyPointExtractionInput,
   KeyPointExtractionResult,
+  ProgressSummaryInput,
+  ProgressSummaryResult,
   QuestionJudgeInput,
   QuestionJudgeResult,
 } from '@turtle-soup/contracts';
 import { buildFinalAnswerJudgePrompt } from '../skills/final-answer-judge.js';
 import { buildKeyPointExtractionPrompt } from '../skills/key-point-extraction.js';
 import { buildQuestionJudgePrompt } from '../skills/question-judge.js';
+import { buildProgressSummaryPrompt } from '../skills/progress-summary.js';
 import {
   EVIDENCE_QUESTION_JUDGE_SCHEMA,
   FINAL_ANSWER_JUDGE_SCHEMA,
   KEY_POINT_EXTRACTION_SCHEMA,
+  PROGRESS_SUMMARY_SCHEMA,
   QUESTION_JUDGE_SCHEMA,
   validateFinalAnswerResult,
   validateEvidenceQuestionResult,
   validateKeyPointExtractionResult,
+  validateProgressSummaryResult,
   validateQuestionResult,
 } from '../skills/validate-result.js';
 import type { ReasoningEffort } from '../config.js';
@@ -106,6 +111,15 @@ export class OpenAIResponsesSemanticJudge {
       buildFinalAnswerJudgePrompt(input),
       FINAL_ANSWER_JUDGE_SCHEMA,
       (raw) => validateFinalAnswerResult(raw, input.key_points.map(({ id }) => id)),
+    );
+  }
+
+  summarizeProgress(input: ProgressSummaryInput): Promise<ProgressSummaryResult> {
+    return this.call(
+      'progress_summary',
+      buildProgressSummaryPrompt(input),
+      PROGRESS_SUMMARY_SCHEMA,
+      (raw) => validateProgressSummaryResult(raw),
     );
   }
 

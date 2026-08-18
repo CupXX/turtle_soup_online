@@ -67,6 +67,10 @@ export function loadWorkerConfig(env: WorkerEnvironment = process.env): WorkerCo
       model: optional(env, 'JUDGE_FINAL_ANSWER_MODEL') ?? model,
       reasoningEffort: reasoningEffort(env, 'JUDGE_FINAL_ANSWER_REASONING_EFFORT'),
     },
+    'progress-summary': {
+      model: optional(env, 'JUDGE_PROGRESS_SUMMARY_MODEL') ?? model,
+      reasoningEffort: reasoningEffort(env, 'JUDGE_PROGRESS_SUMMARY_REASONING_EFFORT'),
+    },
   };
 
   return {

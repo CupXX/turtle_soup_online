@@ -90,6 +90,7 @@ describe('processQuestion', () => {
         return { verdict: 'YES', fully_covered_key_point_ids: [keyPointId] };
       },
       judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+      summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
     };
 
     await processQuestion(action, {

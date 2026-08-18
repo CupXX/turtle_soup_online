@@ -3,7 +3,7 @@ import type { SemanticJudge } from '@turtle-soup/contracts';
 import { JudgeValidationError } from '../skills/validate-result.js';
 import type { JudgeRuntime } from './create-semantic-judge.js';
 import { createAuditedSemanticJudge } from './audited-semantic-judge.js';
-import type { JudgeAttemptRecord } from '../db/judge-attempts.js';
+import type { JudgeAttemptParent, JudgeAttemptRecord } from '../db/judge-attempts.js';
 
 const metadata = {
   provider: 'deepseek-harness',
@@ -21,6 +21,7 @@ function runtime(judge: SemanticJudge): JudgeRuntime {
       'key-point-extraction': { ...metadata, skillVersion: 'key-point-extraction-v2', promptVersion: 'key-point-extraction-v2' },
       'question-judge': metadata,
       'final-answer-judge': { ...metadata, skillVersion: 'final-answer-judge-v1', promptVersion: 'final-answer-judge-v1' },
+      'progress-summary': { ...metadata, skillVersion: 'progress-summary-v1', promptVersion: 'progress-summary-v1' },
     },
   };
 }
@@ -38,6 +39,7 @@ describe('createAuditedSemanticJudge', () => {
       extractKeyPoints: async () => ({ key_points: [] }),
       judgeQuestion: async () => ({ verdict: 'YES', fully_covered_key_point_ids: [] }),
       judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+      summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
     };
     const records: JudgeAttemptRecord[] = [];
     const audited = createAuditedSemanticJudge(
@@ -77,6 +79,7 @@ describe('createAuditedSemanticJudge', () => {
       extractKeyPoints: async () => ({ key_points: [] }),
       judgeQuestion: async () => { throw validationError; },
       judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+      summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
     };
     const recorder = vi.fn(async () => { throw new Error('audit database unavailable'); });
     const audited = createAuditedSemanticJudge(
@@ -91,5 +94,30 @@ describe('createAuditedSemanticJudge', () => {
       errorCode: 'SCHEMA_INVALID',
       parent: { extractionJobId: '00000000-0000-4000-8000-000000000003', attemptNo: 2 },
     }));
+  });
+
+  it('audits progress summaries with a progress-summary parent without exposing input data', async () => {
+    const judge: SemanticJudge = {
+      extractKeyPoints: async () => ({ key_points: [] }),
+      judgeQuestion: async () => ({ verdict: 'YES', fully_covered_key_point_ids: [] }),
+      judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+      summarizeProgress: async () => ({ confirmed_facts: ['fact'], ruled_out_facts: [], irrelevant_topics: [] }),
+    };
+    const records: JudgeAttemptRecord[] = [];
+    const audited = createAuditedSemanticJudge(
+      runtime(judge),
+      { progressSummaryJobId: '00000000-0000-4000-8000-000000000004', attemptNo: 1 } as JudgeAttemptParent,
+      async (record) => { records.push(record); },
+    );
+
+    await expect(audited.summarizeProgress!({
+      questions: [{ sequence_no: 1, question: 'question', verdict: 'YES' }],
+    })).resolves.toEqual({ confirmed_facts: ['fact'], ruled_out_facts: [], irrelevant_topics: [] });
+    expect(records[0]).toMatchObject({
+      parent: { progressSummaryJobId: '00000000-0000-4000-8000-000000000004', attemptNo: 1 },
+      skill: 'progress-summary',
+      promptVersion: 'progress-summary-v1',
+      resultValid: true,
+    });
   });
 });

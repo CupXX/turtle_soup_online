@@ -30,4 +30,24 @@ describe('Harness semantic judge adapter', () => {
       current_message: 'question',
     })).rejects.toThrow(/SCHEMA_INVALID/);
   });
+
+  it('invokes and validates the progress-summary skill with public rows only', async () => {
+    const calls: Array<{ skill: string; prompt: string; schema: Record<string, unknown> }> = [];
+    const judge = new HarnessSemanticJudge(async (request) => {
+      calls.push(request);
+      return { confirmed_facts: ['事实'], ruled_out_facts: [], irrelevant_topics: [] };
+    });
+    const summarize = (judge as unknown as {
+      summarizeProgress?: (input: { questions: Array<{ sequence_no: number; question: string; verdict: 'YES' | 'NO' | 'BOTH' | 'IRRELEVANT' }> }) => Promise<unknown>;
+    }).summarizeProgress;
+    expect(summarize).toBeTypeOf('function');
+    if (!summarize) return;
+
+    await expect(summarize.call(judge, {
+      questions: [{ sequence_no: 1, question: '天气重要吗？', verdict: 'IRRELEVANT' }],
+    })).resolves.toEqual({ confirmed_facts: ['事实'], ruled_out_facts: [], irrelevant_topics: [] });
+    expect(calls[0]?.skill).toBe('progress-summary');
+    expect(calls[0]?.prompt).toContain('天气重要吗？');
+    expect(calls[0]?.schema.required).toEqual(['confirmed_facts', 'ruled_out_facts', 'irrelevant_topics']);
+  });
 });

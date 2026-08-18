@@ -79,6 +79,6 @@ export interface SemanticJudge {
   extractKeyPoints(input: KeyPointExtractionInput): Promise<KeyPointExtractionResult>;
   judgeQuestion(input: QuestionJudgeInput): Promise<QuestionJudgeResult>;
   judgeFinalAnswer(input: FinalAnswerJudgeInput): Promise<FinalAnswerJudgeResult>;
-  summarizeProgress?(input: ProgressSummaryInput): Promise<ProgressSummaryResult>;
+  summarizeProgress(input: ProgressSummaryInput): Promise<ProgressSummaryResult>;
 }
 import type { JudgeVerdict } from './game.js';

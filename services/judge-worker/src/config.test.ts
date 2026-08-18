@@ -26,6 +26,7 @@ describe('worker configuration', () => {
         'key-point-extraction': { model: validEnv.JUDGE_MODEL, reasoningEffort: 'off' },
         'question-judge': { model: validEnv.JUDGE_MODEL, reasoningEffort: 'off' },
         'final-answer-judge': { model: validEnv.JUDGE_MODEL, reasoningEffort: 'off' },
+        'progress-summary': { model: validEnv.JUDGE_MODEL, reasoningEffort: 'off' },
       },
     });
   });
@@ -39,10 +40,13 @@ describe('worker configuration', () => {
       JUDGE_QUESTION_REASONING_EFFORT: 'off',
       JUDGE_FINAL_ANSWER_MODEL: 'deepseek-v4-flash',
       JUDGE_FINAL_ANSWER_REASONING_EFFORT: 'max',
+      JUDGE_PROGRESS_SUMMARY_MODEL: 'deepseek-v4-summary',
+      JUDGE_PROGRESS_SUMMARY_REASONING_EFFORT: 'low',
     }).skillConfigs).toEqual({
       'key-point-extraction': { model: 'deepseek-v4-pro', reasoningEffort: 'high' },
       'question-judge': { model: 'deepseek-v4-pro', reasoningEffort: 'off' },
       'final-answer-judge': { model: 'deepseek-v4-flash', reasoningEffort: 'max' },
+      'progress-summary': { model: 'deepseek-v4-summary', reasoningEffort: 'low' },
     });
   });
 

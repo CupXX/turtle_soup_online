@@ -26,7 +26,9 @@ describe('OpenAI Responses production semantic judge', () => {
         ] }
         : body.text.format.name === 'question_judge'
           ? { verdict: 'YES', fully_covered_key_point_ids: [pointId] }
-          : { covered_key_point_ids: [pointId] };
+          : body.text.format.name === 'progress_summary'
+            ? { confirmed_facts: ['fact'], ruled_out_facts: [], irrelevant_topics: [] }
+            : { covered_key_point_ids: [pointId] };
       return response({
         output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
         usage: { input_tokens: 11, output_tokens: 7 },
@@ -55,8 +57,11 @@ describe('OpenAI Responses production semantic judge', () => {
     await expect(judge.judgeFinalAnswer({ key_points: [{ id: pointId, content: 'point' }], final_answer: 'answer' })).resolves.toEqual({
       covered_key_point_ids: [pointId],
     });
+    await expect(judge.summarizeProgress!({
+      questions: [{ sequence_no: 1, question: 'question', verdict: 'YES' }],
+    })).resolves.toEqual({ confirmed_facts: ['fact'], ruled_out_facts: [], irrelevant_topics: [] });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
     for (const call of fetchImpl.mock.calls) {
       const body = JSON.parse(String(call?.[1]?.body)) as Record<string, unknown>;
       expect(body.model).toBe('gpt-5.6-luna');

@@ -5,8 +5,9 @@ import type { SkillRuntimeMetadata } from '../runtime/create-semantic-judge.js';
 import { getWorkerDb } from './client.js';
 
 export type JudgeAttemptParent =
-  | { actionId: string; extractionJobId?: never; attemptNo: number }
-  | { extractionJobId: string; actionId?: never; attemptNo: number };
+  | { actionId: string; extractionJobId?: never; progressSummaryJobId?: never; attemptNo: number }
+  | { extractionJobId: string; actionId?: never; progressSummaryJobId?: never; attemptNo: number }
+  | { progressSummaryJobId: string; actionId?: never; extractionJobId?: never; attemptNo: number };
 
 export type JudgeAttemptRecord = SkillRuntimeMetadata & {
   parent: JudgeAttemptParent;
@@ -31,6 +32,7 @@ export async function recordJudgeAttempt(
   const id = (dependencies.idFactory ?? randomUUID)();
   const actionId = 'actionId' in input.parent ? (input.parent.actionId ?? null) : null;
   const extractionJobId = 'extractionJobId' in input.parent ? (input.parent.extractionJobId ?? null) : null;
+  const progressSummaryJobId = 'progressSummaryJobId' in input.parent ? (input.parent.progressSummaryJobId ?? null) : null;
 
   await sql`
     insert into private.judge_attempts
@@ -38,6 +40,7 @@ export async function recordJudgeAttempt(
         id,
         action_id,
         extraction_job_id,
+        progress_summary_job_id,
         skill_type,
         provider,
         model,
@@ -58,6 +61,7 @@ export async function recordJudgeAttempt(
         ${id},
         ${actionId},
         ${extractionJobId},
+        ${progressSummaryJobId},
         ${input.skill},
         ${input.provider},
         ${input.model},

@@ -3,6 +3,8 @@ import type {
   FinalAnswerJudgeResult,
   KeyPointExtractionInput,
   KeyPointExtractionResult,
+  ProgressSummaryInput,
+  ProgressSummaryResult,
   QuestionJudgeInput,
   QuestionJudgeResult,
   SemanticJudge,
@@ -48,8 +50,10 @@ export function createAuditedSemanticJudge(
       call('key-point-extraction', input, (value) => runtime.judge.extractKeyPoints(value)),
     judgeQuestion: (input: QuestionJudgeInput): Promise<QuestionJudgeResult> =>
       call('question-judge', input, (value) => runtime.judge.judgeQuestion(value)),
-    judgeFinalAnswer: (input: FinalAnswerJudgeInput): Promise<FinalAnswerJudgeResult> =>
+  judgeFinalAnswer: (input: FinalAnswerJudgeInput): Promise<FinalAnswerJudgeResult> =>
       call('final-answer-judge', input, (value) => runtime.judge.judgeFinalAnswer(value)),
+    summarizeProgress: (input: ProgressSummaryInput): Promise<ProgressSummaryResult> =>
+      call('progress-summary', input, (value) => runtime.judge.summarizeProgress(value)),
   };
 }
 
