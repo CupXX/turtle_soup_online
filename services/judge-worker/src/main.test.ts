@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClaimedAction, ClaimedExtraction } from './db/queue.js';
+import type { ClaimedProgressSummaryJob } from './db/progress-summary-queue.js';
 import { startWorker } from './main.js';
 
 const env = {
@@ -28,6 +29,17 @@ const action: ClaimedAction = {
   playerId: '00000000-0000-4000-8000-000000000004',
   sequenceNo: 1,
   actionType: 'NORMAL_MESSAGE',
+  attempt: 1,
+  leaseOwner: 'worker-1',
+  leaseExpiresAt: extraction.leaseExpiresAt,
+};
+
+const summaryJob: ClaimedProgressSummaryJob = {
+  id: '00000000-0000-4000-8000-000000000005',
+  gameId: extraction.gameId,
+  throughQuestionCount: 10,
+  throughSequenceNo: 10,
+  sourceFingerprint: 'a'.repeat(64),
   attempt: 1,
   leaseOwner: 'worker-1',
   leaseExpiresAt: extraction.leaseExpiresAt,
@@ -73,5 +85,59 @@ describe('startWorker', () => {
     });
 
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('wires default startup reconciliation and the separate summary queue', async () => {
+    const order: string[] = [];
+    await startWorker(env, {
+      judge: {} as never,
+      writeHeartbeat: async () => undefined,
+      reconcileProgressSummary: async () => { order.push('reconcile'); },
+      claimProgressSummary: async () => { order.push('claim-summary'); return summaryJob; },
+      processProgressSummary: async (job) => { order.push(`process-summary:${job.id}`); },
+      runWorker: async (options) => {
+        await options.heartbeat();
+        await options.startupReconcile?.();
+        const job = await options.claimProgressSummary?.();
+        if (job) await options.processProgressSummary?.(job);
+      },
+    });
+
+    expect(order).toEqual(['reconcile', 'claim-summary', `process-summary:${summaryJob.id}`]);
+  });
+
+  it('creates the progress-summary audit parent for the default processor', async () => {
+    const records: Array<{ skill: string; parent: unknown }> = [];
+    let receivedSkill = '';
+    await startWorker(env, {
+      runtime: {
+        judge: {
+          extractKeyPoints: async () => ({ key_points: [] }),
+          judgeQuestion: async () => ({ verdict: 'NO', fully_covered_key_point_ids: [] }),
+          judgeFinalAnswer: async () => ({ covered_key_point_ids: [] }),
+          summarizeProgress: async () => ({ confirmed_facts: [], ruled_out_facts: [], irrelevant_topics: [] }),
+        },
+        metadata: {},
+      } as never,
+      writeHeartbeat: async () => undefined,
+      reconcileProgressSummary: async () => undefined,
+      claimProgressSummary: async () => summaryJob,
+      processProgressSummaryJob: async (_job, dependencies) => {
+        receivedSkill = 'progress-summary';
+        await dependencies.judge.summarizeProgress({ questions: [] });
+      },
+      recordJudgeAttempt: async (record) => { records.push({ skill: record.skill, parent: record.parent }); },
+      runWorker: async (options) => {
+        await options.startupReconcile?.();
+        const job = await options.claimProgressSummary?.();
+        if (job) await options.processProgressSummary?.(job);
+      },
+    });
+
+    expect(receivedSkill).toBe('progress-summary');
+    expect(records).toEqual([{
+      skill: 'progress-summary',
+      parent: { progressSummaryJobId: summaryJob.id, attemptNo: summaryJob.attempt },
+    }]);
   });
 });
