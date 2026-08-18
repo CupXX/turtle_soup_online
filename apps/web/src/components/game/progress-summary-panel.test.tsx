@@ -27,7 +27,7 @@ function summary(overrides: Partial<PublicGameProgressSummary> = {}): PublicGame
     throughQuestionCount: 10,
     throughSequenceNo: 10,
     confirmedFacts: ['事实一'],
-    ruledOutFacts: ['排除一'],
+    ruledOutFacts: ['否定事实一'],
     irrelevantTopics: ['无关一'],
     generationStatus: 'READY',
     targetQuestionCount: null,
@@ -62,13 +62,17 @@ describe('ProgressSummaryPanel', () => {
     expect(screen.getByText('正在整理当前进度…')).toBeTruthy();
   });
 
-  it('renders READY categories and updates countdown from current judged messages', () => {
+  it('renders two player-facing sections: current facts and irrelevant directions', () => {
     render(<ProgressSummaryPanel messages={messages(17)} summary={summary()} />);
 
     expect(screen.getByText('整理至第 10 问')).toBeTruthy();
+    expect(screen.getByText('当前事实')).toBeTruthy();
     expect(screen.getByText('事实一')).toBeTruthy();
-    expect(screen.getByText('排除一')).toBeTruthy();
+    expect(screen.getByText('否定事实一')).toBeTruthy();
+    expect(screen.getByText('无关方向')).toBeTruthy();
     expect(screen.getByText('无关一')).toBeTruthy();
+    expect(screen.queryByText('已确认')).toBeNull();
+    expect(screen.queryByText('已排除')).toBeNull();
     expect(screen.getByText('再完成 3 个问题后更新')).toBeTruthy();
   });
 
@@ -79,6 +83,7 @@ describe('ProgressSummaryPanel', () => {
       generationStatus: 'PENDING',
     })} />);
     expect(screen.getByText('事实一')).toBeTruthy();
+    expect(screen.getByText('否定事实一')).toBeTruthy();
     expect(screen.getByText('正在更新到第 40 问…')).toBeTruthy();
 
     rerender(<ProgressSummaryPanel messages={messages(37)} summary={summary({
@@ -87,10 +92,11 @@ describe('ProgressSummaryPanel', () => {
       generationStatus: 'ERROR',
     })} />);
     expect(screen.getByText('事实一')).toBeTruthy();
+    expect(screen.getByText('否定事实一')).toBeTruthy();
     expect(screen.getByText('本轮总结暂时未更新')).toBeTruthy();
   });
 
-  it('uses safe failure copy and omits empty categories without hidden progress data', () => {
+  it('uses safe failure copy and omits empty sections without hidden progress data', () => {
     render(<ProgressSummaryPanel messages={messages(10)} summary={summary({
       throughQuestionCount: 0,
       throughSequenceNo: 0,
@@ -104,6 +110,7 @@ describe('ProgressSummaryPanel', () => {
 
     expect(screen.getByText('当前进度总结暂时不可用')).toBeTruthy();
     expect(screen.queryByText(/关键点已发现/)).toBeNull();
-    expect(screen.queryByText('已确认')).toBeNull();
+    expect(screen.queryByText('当前事实')).toBeNull();
+    expect(screen.queryByText('无关方向')).toBeNull();
   });
 });
