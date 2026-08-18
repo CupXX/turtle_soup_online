@@ -40,6 +40,9 @@ export function ProgressSummaryPanel({ messages, summary }: ProgressSummaryPanel
   const hasPreviousFacts = hasSuccessfulSummary;
   const target = summary?.targetQuestionCount;
   const status = summary?.generationStatus;
+  const currentFacts = summary
+    ? Array.from(new Set([...summary.confirmedFacts, ...summary.ruledOutFacts]))
+    : [];
 
   let statusCopy: string;
   if (status === 'ERROR' && !hasPreviousFacts) {
@@ -74,8 +77,7 @@ export function ProgressSummaryPanel({ messages, summary }: ProgressSummaryPanel
 
       {hasSuccessfulSummary ? (
         <div className="progress-summary-facts">
-          <FactGroup label="已确认" facts={summary!.confirmedFacts} />
-          <FactGroup label="已排除" facts={summary!.ruledOutFacts} />
+          <FactGroup label="当前事实" facts={currentFacts} />
           <FactGroup label="无关方向" facts={summary!.irrelevantTopics} />
         </div>
       ) : null}
