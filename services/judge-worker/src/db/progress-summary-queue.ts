@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { JudgeErrorCode, ProgressSummarySourceItem } from '@turtle-soup/contracts';
 import type { Sql } from 'postgres';
+import { PROGRESS_SUMMARY_PROMPT_VERSION } from '../skills/progress-summary.js';
 import { withWorkerTransaction, type WorkerTransaction } from './client.js';
 import { LEASE_SECONDS, type QueueDependencies, retryDelaySeconds } from './queue.js';
 
@@ -59,8 +60,14 @@ function assertProgressSummaryBoundary(throughQuestionCount: number): void {
 export function fingerprintProgressSummarySource(
   questions: readonly ProgressSummarySourceItem[],
 ): string {
+  const canonicalQuestions = questions.map(
+    ({ sequence_no, question, verdict }) => [sequence_no, question, verdict],
+  );
   return createHash('sha256')
-    .update(JSON.stringify(questions.map(({ sequence_no, question, verdict }) => [sequence_no, question, verdict])))
+    .update(JSON.stringify({
+      policy_version: PROGRESS_SUMMARY_PROMPT_VERSION,
+      questions: canonicalQuestions,
+    }))
     .digest('hex');
 }
 
