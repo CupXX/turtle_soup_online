@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { ProgressSummarySourceItem } from '@turtle-soup/contracts';
+import type { JudgeErrorCode, ProgressSummarySourceItem } from '@turtle-soup/contracts';
 import type { Sql } from 'postgres';
+import { withWorkerTransaction, type WorkerTransaction } from './client.js';
+import { LEASE_SECONDS, type QueueDependencies, retryDelaySeconds } from './queue.js';
 
 const MIN_PROGRESS_SUMMARY_BOUNDARY = 10;
 
@@ -22,6 +24,27 @@ export type ProgressSummaryBoundary = {
   sourceFingerprint: string;
   questions: ProgressSummarySourceItem[];
 };
+
+export type ClaimedProgressSummaryJob = {
+  id: string;
+  gameId: string;
+  throughQuestionCount: number;
+  throughSequenceNo: number;
+  sourceFingerprint: string;
+  attempt: number;
+  leaseOwner: string;
+  leaseExpiresAt: string;
+};
+
+type ProgressSummaryCandidate = Pick<ClaimedProgressSummaryJob, 'id' | 'gameId' | 'throughQuestionCount' | 'throughSequenceNo' | 'sourceFingerprint' | 'attempt'>;
+
+function transactionFor(dependencies: QueueDependencies): WorkerTransaction {
+  return dependencies.transaction ?? withWorkerTransaction;
+}
+
+function leaseExpiry(now: Date): Date {
+  return new Date(now.getTime() + LEASE_SECONDS * 1000);
+}
 
 function assertProgressSummaryBoundary(throughQuestionCount: number): void {
   if (
@@ -187,4 +210,126 @@ export async function reconcileActiveGameProgressSummary(sql: Sql): Promise<void
   if (boundary < MIN_PROGRESS_SUMMARY_BOUNDARY) return;
 
   await ensureProgressSummaryJobForBoundary(sql, activeGame.id, boundary);
+}
+
+export async function claimNextProgressSummary(
+  workerId: string,
+  now: Date,
+  dependencies: Pick<QueueDependencies, 'transaction'> = {},
+): Promise<ClaimedProgressSummaryJob | null> {
+  const expiresAt = leaseExpiry(now);
+  return transactionFor(dependencies)(async (sql) => {
+    const candidates = await sql<ProgressSummaryCandidate[]>`
+      select
+        jobs.id,
+        jobs.game_id as "gameId",
+        jobs.through_question_count as "throughQuestionCount",
+        jobs.through_sequence_no as "throughSequenceNo",
+        jobs.source_fingerprint as "sourceFingerprint",
+        jobs.attempt_count as attempt
+      from private.progress_summary_jobs jobs
+      join api.games games on games.id = jobs.game_id
+      where games.status = 'ACTIVE'
+        and jobs.attempt_count < 4
+        and jobs.next_attempt_at <= ${now}
+        and (
+          jobs.status in ('PENDING', 'RETRY')
+          or (jobs.status = 'PROCESSING' and jobs.lease_expires_at <= ${now})
+        )
+      order by jobs.next_attempt_at asc, jobs.created_at asc
+      limit 1
+      for update of jobs
+    `;
+    const candidate = candidates[0];
+    if (!candidate) return null;
+
+    const leased = await sql<ClaimedProgressSummaryJob[]>`
+      update private.progress_summary_jobs
+      set status = 'PROCESSING',
+          attempt_count = attempt_count + 1,
+          lease_owner = ${workerId},
+          lease_expires_at = ${expiresAt},
+          updated_at = now()
+      where id = ${candidate.id}
+        and attempt_count < 4
+      returning
+        id,
+        game_id as "gameId",
+        through_question_count as "throughQuestionCount",
+        through_sequence_no as "throughSequenceNo",
+        source_fingerprint as "sourceFingerprint",
+        attempt_count as attempt,
+        lease_owner as "leaseOwner",
+        lease_expires_at as "leaseExpiresAt"
+    `;
+    return leased[0] ?? null;
+  });
+}
+
+export async function recordProgressSummaryRetry(
+  jobId: string,
+  attempt: number,
+  code: JudgeErrorCode,
+  dependencies: QueueDependencies = {},
+): Promise<void> {
+  const delay = retryDelaySeconds(attempt);
+  if (delay === null) {
+    await markProgressSummaryBlocked(jobId, code, dependencies);
+    return;
+  }
+
+  const nextAttemptAt = new Date((dependencies.now ?? new Date()).getTime() + delay * 1000);
+  await transactionFor(dependencies)(async (sql) => {
+    await sql`
+      update private.progress_summary_jobs
+      set status = 'RETRY',
+          attempt_count = ${attempt},
+          next_attempt_at = ${nextAttemptAt},
+          lease_owner = null,
+          lease_expires_at = null,
+          error_code = ${code},
+          updated_at = now()
+      where id = ${jobId}
+        and status = 'PROCESSING'
+    `;
+  });
+}
+
+export async function markProgressSummaryBlocked(
+  jobId: string,
+  code: JudgeErrorCode,
+  dependencies: QueueDependencies = {},
+): Promise<void> {
+  await transactionFor(dependencies)(async (sql) => {
+    const blocked = await sql<Array<{
+      gameId: string;
+      throughQuestionCount: number;
+      sourceFingerprint: string;
+    }>>`
+      update private.progress_summary_jobs
+      set status = 'BLOCKED',
+          lease_owner = null,
+          lease_expires_at = null,
+          error_code = ${code},
+          updated_at = now()
+      where id = ${jobId}
+        and status = 'PROCESSING'
+      returning
+        game_id as "gameId",
+        through_question_count as "throughQuestionCount",
+        source_fingerprint as "sourceFingerprint"
+    `;
+    const job = blocked[0];
+    if (!job) return;
+
+    await sql`
+      update api.game_progress_summaries
+      set generation_status = 'ERROR',
+          updated_at = now()
+      where game_id = ${job.gameId}
+        and target_question_count = ${job.throughQuestionCount}
+        and target_source_fingerprint = ${job.sourceFingerprint}
+        and generation_status = 'PENDING'
+    `;
+  });
 }

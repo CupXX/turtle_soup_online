@@ -1,5 +1,8 @@
-import type { Sql } from 'postgres';
+import type { Sql, TransactionSql } from 'postgres';
 import { describe, expect, it } from 'vitest';
+import {
+  RETRY_SECONDS,
+} from './queue.js';
 
 type ProgressSummaryQueue = {
   fingerprintProgressSummarySource: (questions: ReadonlyArray<{
@@ -15,6 +18,18 @@ type ProgressSummaryQueue = {
   }>;
   ensureProgressSummaryJobForBoundary: (sql: Sql, gameId: string, throughQuestionCount: number) => Promise<void>;
   reconcileActiveGameProgressSummary: (sql: Sql) => Promise<void>;
+  claimNextProgressSummary: (workerId: string, now: Date, dependencies?: { transaction?: unknown }) => Promise<{
+    id: string;
+    gameId: string;
+    throughQuestionCount: number;
+    throughSequenceNo: number;
+    sourceFingerprint: string;
+    attempt: number;
+    leaseOwner: string;
+    leaseExpiresAt: string;
+  } | null>;
+  recordProgressSummaryRetry: (jobId: string, attempt: number, code: string, dependencies?: { transaction?: unknown; now?: Date }) => Promise<void>;
+  markProgressSummaryBlocked: (jobId: string, code: string, dependencies?: { transaction?: unknown; now?: Date }) => Promise<void>;
 };
 
 async function loadQueue(): Promise<ProgressSummaryQueue> {
@@ -31,6 +46,19 @@ function fakeSql(handler: (query: string) => unknown[]) {
     return Promise.resolve(handler(query) as never);
   }) as unknown as Sql;
   return { calls, sql };
+}
+
+function fakeTransaction(results: unknown[][]) {
+  const calls: string[] = [];
+  const transaction = async <T>(callback: (sql: TransactionSql) => Promise<T>): Promise<T> => {
+    const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
+      const query = strings.reduce((text, chunk, index) => `${text}${chunk}${index < values.length ? String(values[index]) : ''}`, '');
+      calls.push(query);
+      return Promise.resolve((results.shift() ?? []) as never);
+    }) as unknown as TransactionSql;
+    return callback(sql);
+  };
+  return { calls, transaction };
 }
 
 const gameId = '00000000-0000-4000-8000-000000000001';
@@ -206,5 +234,70 @@ describe('progress summary source and scheduler', () => {
     ]);
     expect(insertCount).toBe(2);
     expect(fake.calls.filter((query) => query.toLowerCase().includes('insert into api.game_progress_summaries'))).toHaveLength(1);
+  });
+
+  it('claims a pending summary with the shared lease and increments its attempt', async () => {
+    const queue = await loadQueue();
+    const fake = fakeTransaction([
+      [{
+        id: '00000000-0000-4000-8000-000000000002',
+        gameId,
+        throughQuestionCount: 10,
+        throughSequenceNo: 12,
+        sourceFingerprint: 'a'.repeat(64),
+        attempt: 0,
+      }],
+      [{
+        id: '00000000-0000-4000-8000-000000000002',
+        gameId,
+        throughQuestionCount: 10,
+        throughSequenceNo: 12,
+        sourceFingerprint: 'a'.repeat(64),
+        attempt: 1,
+        leaseOwner: 'worker-1',
+        leaseExpiresAt: '2026-08-18T20:01:00.000Z',
+      }],
+    ]);
+
+    await expect(queue.claimNextProgressSummary('worker-1', new Date('2026-08-18T20:00:00.000Z'), {
+      transaction: fake.transaction,
+    })).resolves.toMatchObject({
+      gameId,
+      throughQuestionCount: 10,
+      throughSequenceNo: 12,
+      attempt: 1,
+      leaseOwner: 'worker-1',
+    });
+    expect(fake.calls[0].toLowerCase()).toContain('for update of jobs');
+    expect(fake.calls[0].toLowerCase()).toContain("status in ('pending', 'retry')");
+    expect(fake.calls[1].toLowerCase()).toContain("status = 'processing'");
+  });
+
+  it('reuses 2/5/15 second retries and blocks on attempt four', async () => {
+    const queue = await loadQueue();
+    expect(RETRY_SECONDS).toEqual([2, 5, 15]);
+
+    const retry = fakeTransaction([[]]);
+    await expect(queue.recordProgressSummaryRetry('job-1', 2, 'TIMEOUT', {
+      transaction: retry.transaction,
+      now: new Date('2026-08-18T20:00:00.000Z'),
+    })).resolves.toBeUndefined();
+    expect(retry.calls[0].toLowerCase()).toContain("status = 'retry'");
+    expect(retry.calls[0].toLowerCase()).toContain('next_attempt_at');
+    expect(retry.calls[0]).toContain('attempt_count = 2');
+
+    const blocked = fakeTransaction([[
+      {
+        gameId,
+        throughQuestionCount: 10,
+        sourceFingerprint: 'b'.repeat(64),
+      },
+    ], []]);
+    await expect(queue.recordProgressSummaryRetry('job-1', 4, 'SCHEMA_INVALID', {
+      transaction: blocked.transaction,
+    })).resolves.toBeUndefined();
+    expect(blocked.calls[0].toLowerCase()).toContain("status = 'blocked'");
+    expect(blocked.calls[1].toLowerCase()).toContain("generation_status = 'error'");
+    expect(blocked.calls[1].toLowerCase()).toContain('target_source_fingerprint');
   });
 });
