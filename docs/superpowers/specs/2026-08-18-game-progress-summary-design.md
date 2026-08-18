@@ -2,18 +2,20 @@
 
 ## Status
 
-Approved feature design for the right-sidebar **“当前进度”** module.
+Approved feature design for the right-sidebar **“当前进度”** module, plus the same-release message-row key-point hit indicator change.
 
 ## Repository baseline
 
 - Repository: `CupXX/turtle_soup_online`
 - Branch: `main`
 - Code baseline: `88382241598da3c6a3d452f6586eac4b03b3bf9a`
-- Planning-doc commits after that baseline are documentation-only and do not count as code drift.
+- Planning/spec commits after that baseline are documentation-only and do not count as code drift.
 
 If implementation starts from a later code commit, compare only code changes after this baseline that touch the files or invariants named below.
 
-## Goal
+## Goals
+
+### Progress summary
 
 Replace the right-sidebar placeholder with a cumulative AI-written progress summary that helps players remember what the group has already established.
 
@@ -25,23 +27,52 @@ The summary updates at every 10 **judged normal questions** and organizes curren
 
 `BOTH` remains visible in the message feed but does not produce a summary fact in V1.
 
-The Worker must also reconcile an already-running game at startup. If an ACTIVE game already has at least 10 judged questions but lacks the current eligible summary, startup immediately enqueues the most recent 10-question boundary. Example: **41 judged questions → ensure a summary through question 40**.
+The Worker must also reconcile an already-running game at startup. If an ACTIVE game already has at least 10 judged questions but lacks the current eligible summary, startup immediately ensures the most recent 10-question boundary. Example: **41 judged questions → ensure a summary through question 40**.
+
+### Key-point hit indicator
+
+Keep the existing verdict reaction icon in each judged message row, but replace the numeric point label currently rendered underneath it.
+
+Current visual behavior:
+
+```text
+✅
++1
+```
+
+New visual behavior:
+
+```text
+✅ 👍
+```
+
+If one message currently has `awardedPoints = N`, render exactly **N thumbs-up emoji (`👍`)** immediately to the right of the verdict icon on the same visual line:
+
+```text
+awardedPoints = 0  →  ✅
+awardedPoints = 1  →  ✅ 👍
+awardedPoints = 2  →  ✅ 👍👍
+```
+
+The thumbs indicate how many key points that message currently owns/triggered according to the existing public `awardedPoints` value. They do not introduce a new score source and do not change scoring semantics.
 
 ## Non-goals
 
-- Do not change verdict semantics.
+- Do not change YES / NO / BOTH / IRRELEVANT semantics.
 - Do not change key-point extraction, cumulative Evidence, scoring, hit rate, challenge voting, or final-answer behavior.
-- Do not count `FINAL_ANSWER` or `CHALLENGE` actions toward the cadence.
+- Do not reinterpret or recalculate `awardedPoints` in the browser.
+- Do not display `+1`, `+2`, or other numeric point badges beside judged messages after this UI change.
+- Do not count `FINAL_ANSWER` or `CHALLENGE` actions toward summary cadence.
 - Do not summarize PENDING / ERROR / CANCELLED messages.
-- Do not use `full_solution`, private key points, private Evidence, claims, awards, or scores as summary input.
-- Do not add manual player/admin editing, history navigation, or per-player summaries.
+- Do not use `full_solution`, private key points, private Evidence, claims, awards, or scores as summary-model input.
+- Do not add manual player/admin summary editing, history navigation, or per-player summaries.
 - Do not generate a special final summary when the game ends.
 - Startup reconciliation applies only to the current ACTIVE game; it does not backfill ENDED history.
 - A BLOCKED/ERROR summary for the exact same source state is not automatically retried merely because the Worker restarts.
 
 ## Existing architecture and constraints
 
-The current UI already reserves the target slot in `apps/web/src/components/game/game-client.tsx`:
+The current UI reserves the summary slot in `apps/web/src/components/game/game-client.tsx`:
 
 ```tsx
 <section className="sidebar-card progress-placeholder" aria-label="当前进度">
@@ -57,9 +88,20 @@ The current UI already reserves the target slot in `apps/web/src/components/game
 
 The Worker currently has key-point extraction jobs plus the strict ordered `private.game_actions` queue (`NORMAL_MESSAGE`, `FINAL_ANSWER`, `CHALLENGE`). Progress-summary work must remain a separate queue and must not add a fake player action type.
 
-Challenge resolution can change the current verdict of a previously summarized question, so summary jobs need same-boundary regeneration without publishing stale output.
+Challenge resolution can change the current verdict and `awardedPoints` of previously processed messages. Summary jobs therefore need same-boundary regeneration without stale publication, while the message-row hit indicator must simply render the current public `awardedPoints` on every snapshot refresh.
 
-## User-visible behavior
+The existing message row in `apps/web/src/components/game/message-row.tsx` renders:
+
+```tsx
+<div className="message-result" ...>
+  <span className="reaction">...</span>
+  {message.awardedPoints > 0 ? <span className="points">+{message.awardedPoints}</span> : null}
+</div>
+```
+
+That numeric `.points` presentation is the exact UI behavior being replaced by thumbs-up hits.
+
+## User-visible summary behavior
 
 ### 0–9 judged questions
 
@@ -120,7 +162,7 @@ Examples:
 - same 40-boundary source already PENDING/PROCESSING/RETRY → no duplicate.
 - same 40-boundary source already BLOCKED and public status is ERROR → do not silently create a fifth attempt on restart.
 
-This startup pass is deliberately **reconciliation**, not “retry everything”. It repairs missing work caused by deploying the feature into an already-running game or by a process stopping before a boundary was scheduled, while preserving the existing retry ceiling.
+This startup pass is reconciliation, not “retry everything”. It repairs missing work caused by deploying the feature into an already-running game or by a process stopping before a boundary was scheduled, while preserving the existing retry ceiling.
 
 The operation must be safe if multiple Worker processes start: database uniqueness/idempotency determines the winner and all other attempts become no-ops.
 
@@ -265,6 +307,8 @@ Extend `SemanticJudge`:
 summarizeProgress(input: ProgressSummaryInput): Promise<ProgressSummaryResult>;
 ```
 
+No contract change is needed for the hit indicator: it consumes the existing `PublicMessage.awardedPoints` number.
+
 ## Database design
 
 ### `api.game_progress_summaries`
@@ -346,7 +390,7 @@ is non-null.
 
 ## Shared scheduling helper
 
-Create one repository-level Worker DB helper that all three trigger paths use, conceptually:
+Create one Worker DB helper that all three trigger paths use, conceptually:
 
 ```ts
 ensureProgressSummaryJobForBoundary(
@@ -378,7 +422,7 @@ After a question has become JUDGED inside `completeQuestion()`:
 1. count current JUDGED messages for the game;
 2. only when `count % 10 === 0`, call the shared ensure helper with `count`;
 3. do not use receipt count;
-4. do not change scoring if scheduling fails due to an already-existing job.
+4. do not change scoring if scheduling is an idempotent no-op because a matching job already exists.
 
 ### Challenge refresh
 
@@ -412,13 +456,13 @@ must:
 
 1. read at most the current ACTIVE game;
 2. count/order current JUDGED messages;
-3. compute latestBoundary = floor(count / 10) * 10;
+3. compute `latestBoundary = floor(count / 10) * 10`;
 4. no-op below 10;
 5. call `ensureProgressSummaryJobForBoundary(sql, gameId, latestBoundary)`.
 
 Do not clear or reset a BLOCKED job. Because the shared ensure helper checks the all-status unique key, restarting the Worker cannot bypass the retry ceiling.
 
-Startup reconciliation failure should be logged/fail startup only for genuine database/programming errors. A normal idempotent no-op is not an error.
+Startup reconciliation failure should fail/log startup only for genuine database/programming errors. A normal idempotent no-op is not an error.
 
 ## Worker queue and processing
 
@@ -462,7 +506,7 @@ Strict output schema:
 
 Audit through the existing best-effort `judge_attempts` flow; audit failure must never alter summary behavior.
 
-## Snapshot, Realtime, and UI
+## Snapshot, Realtime, and summary UI
 
 `getCurrentSnapshot()` includes `progressSummary` from `api.game_progress_summaries`.
 
@@ -486,9 +530,56 @@ UI states:
 - old facts + ERROR: keep old facts and show `本轮总结暂时未更新`.
 - no successful facts + ERROR: safe failure copy, no technical details.
 
-Do not show hidden KP progress in this card. The existing discovered-key-point mechanics remain separate.
+Do not show hidden KP progress in the summary card. The message-row thumbs are a separate public hit indicator based only on existing `awardedPoints`.
+
+## Message-row key-point hit UI
+
+### Files and structure
+
+The behavior lives in:
+
+- `apps/web/src/components/game/message-row.tsx`
+- `apps/web/src/components/game/message-row.test.tsx`
+- `apps/web/src/app/globals.css`
+
+Keep verdict and hit indicator grouped inside the existing `.message-result` area. Introduce a small inline reaction row rather than changing the overall message-grid structure.
+
+Recommended markup shape:
+
+```tsx
+<div
+  className="message-result"
+  aria-label={judged
+    ? `判定 ${message.verdict}${message.awardedPoints > 0 ? `，触发 ${message.awardedPoints} 个关键点` : ''}`
+    : statusText(message)}
+>
+  <span className="reaction-line">
+    <span className="reaction" aria-hidden={judged ? undefined : true}>{statusText(message)}</span>
+    {message.awardedPoints > 0 ? (
+      <span className="key-point-hits" aria-hidden="true">
+        {'👍'.repeat(message.awardedPoints)}
+      </span>
+    ) : null}
+  </span>
+</div>
+```
+
+Equivalent accessible markup is acceptable, but the visible behavior is fixed:
+
+- verdict icon remains unchanged;
+- thumbs are on the icon's right, not below it;
+- render exactly `awardedPoints` thumbs;
+- render no numeric `+N` point text;
+- `awardedPoints = 0` renders no thumb;
+- `awardedPoints = 2` visibly renders `👍👍`, not one generic hit marker.
+
+CSS should keep the icon and thumbs inline and compact inside the existing message result area. Do not redesign message bubble widths, owner alignment, or challenge button layout.
+
+Because Challenge rebuilds can change `awardedPoints`, no special Challenge-specific UI state is required: rendering current `message.awardedPoints` automatically updates the thumbs after the public snapshot refresh.
 
 ## Key acceptance cases
+
+### Summary
 
 1. Judged counts 1–9 create no job.
 2. The 10th judged question creates exactly one boundary-10 job.
@@ -506,6 +597,14 @@ Do not show hidden KP progress in this card. The existing discovered-key-point m
 14. Summary model input contains public question text/current verdict only and no private solution/KP/Evidence data.
 15. Realtime READY transition replaces the placeholder in the right-sidebar “当前进度” card.
 
+### Message-row hit indicator
+
+16. `awardedPoints = 0` shows the verdict icon and no `👍`.
+17. `awardedPoints = 1` shows exactly one `👍` immediately to the verdict icon's right and does not render `+1`.
+18. `awardedPoints = 2` shows exactly two thumbs (`👍👍`) and does not render `+2`.
+19. The accessible judgment label communicates the current hit count when positive.
+20. A changed `awardedPoints` value after Challenge/rebuild produces the corresponding current number of thumbs without changing score logic.
+
 ## Verification standard
 
 Implementation is complete only after focused TDD plus:
@@ -519,4 +618,4 @@ pnpm build
 git diff --check
 ```
 
-Also run the local acceptance path extended to cover boundary-10 generation and startup backfill (41 → 40).
+Also run the local acceptance path extended to cover boundary-10 generation and startup backfill (41 → 40), plus focused `MessageRow` UI tests for 0/1/2 hit thumbs.
