@@ -70,6 +70,17 @@ describe('processClaimedAction', () => {
     expect(fake.retries).toEqual([{ id: action.id, attempt: action.attempt, code: 'SCHEMA_INVALID' }]);
   });
 
+  it('maps unknown final-answer completion failures to a bounded internal retry', async () => {
+    const fake = dependencies(async () => undefined, async () => {
+      throw new Error('permission denied for table game_events');
+    });
+
+    await processClaimedAction({ ...action, actionType: 'FINAL_ANSWER' }, fake.value);
+
+    expect(fake.retries).toEqual([{ id: action.id, attempt: action.attempt, code: 'INTERNAL_ERROR' }]);
+    expect(fake.blocks).toEqual([]);
+  });
+
   it('does not retry a lease that was already lost before dispatch', async () => {
     let processed = 0;
     const fake = dependencies(async () => { processed += 1; });

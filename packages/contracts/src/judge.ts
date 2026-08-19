@@ -73,6 +73,7 @@ export type JudgeErrorCode =
   | 'SCHEMA_INVALID'
   | 'UNKNOWN_KEY_POINT_ID'
   | 'UNKNOWN_EVIDENCE_ID'
+  | 'INTERNAL_ERROR'
   | 'LEASE_LOST';
 
 export interface SemanticJudge {

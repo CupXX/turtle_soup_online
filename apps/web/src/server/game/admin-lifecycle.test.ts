@@ -170,6 +170,7 @@ describe('admin lifecycle', () => {
 
     const query = fake.calls.join('\n').toLowerCase();
     expect(query).toContain("status = 'retry'");
+    expect(query).toContain('attempt_count = 0');
     expect(query).not.toContain('final_answer_submissions');
     expect(query).not.toContain('answer');
   });

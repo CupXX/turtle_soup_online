@@ -133,7 +133,21 @@ export async function claimNextAction(
       for update of actions
     `;
     const candidate = candidates[0];
-    if (!candidate) return null;
+    if (!candidate) {
+      await sql`
+        update private.game_actions
+        set status = 'BLOCKED',
+            lease_owner = null,
+            lease_expires_at = null,
+            error_code = 'INTERNAL_ERROR',
+            updated_at = now()
+        where status = 'PROCESSING'
+          and action_type = 'FINAL_ANSWER'
+          and attempt_count >= 4
+          and lease_expires_at <= ${now}
+      `;
+      return null;
+    }
 
     const leased = await sql<ClaimedAction[]>`
       update private.game_actions

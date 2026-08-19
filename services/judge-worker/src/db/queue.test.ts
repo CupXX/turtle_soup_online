@@ -90,6 +90,19 @@ describe('durable queue', () => {
     expect(query).not.toContain('skip locked');
   });
 
+  it('blocks an exhausted expired final-answer lease instead of leaving it reclaimable forever', async () => {
+    const fake = fakeTransaction([[]]);
+
+    await expect(claimNextAction('worker-1', new Date('2026-08-19T00:00:00.000Z'), { transaction: fake.transaction }))
+      .resolves.toBeNull();
+
+    expect(fake.calls).toHaveLength(2);
+    expect(fake.calls[1].toLowerCase()).toContain("status = 'blocked'");
+    expect(fake.calls[1].toLowerCase()).toContain("action_type = 'final_answer'");
+    expect(fake.calls[1].toLowerCase()).toContain('attempt_count >= 4');
+    expect(fake.calls[1].toLowerCase()).toContain("error_code = 'internal_error'");
+  });
+
   it('records extraction retry backoff only in the extraction queue', async () => {
     const fake = fakeTransaction([[]]);
 

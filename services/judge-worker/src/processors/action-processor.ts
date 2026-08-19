@@ -36,7 +36,7 @@ function retryCode(error: unknown): RetryCode | 'LEASE_LOST' | null {
   if (error instanceof SemanticJudgeRuntimeError) return error.code;
   if (error instanceof JudgeValidationError) return error.code;
   if (error instanceof Error && error.message === 'LEASE_LOST') return 'LEASE_LOST';
-  return null;
+  return 'INTERNAL_ERROR';
 }
 
 async function retryAction(

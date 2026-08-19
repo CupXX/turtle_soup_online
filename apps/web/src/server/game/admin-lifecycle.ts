@@ -420,6 +420,7 @@ export async function retryBlockedAction(
     await sql`
       update private.game_actions
       set status = 'RETRY',
+          attempt_count = 0,
           next_attempt_at = now(),
           lease_owner = null,
           lease_expires_at = null,
